@@ -9,6 +9,7 @@
     <PackageProjectUrl>https://github.com/caseymarquis/KC.NanoProcesses</PackageProjectUrl>
     <RepositoryUrl>https://github.com/caseymarquis/KC.NanoProcesses</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
+    <AllowedOutputExtensionsInPackageBuildOutputFolder>$(AllowedOutputExtensionsInPackageBuildOutputFolder);.pdb</AllowedOutputExtensionsInPackageBuildOutputFolder>
   </PropertyGroup>
 
 </Project>
