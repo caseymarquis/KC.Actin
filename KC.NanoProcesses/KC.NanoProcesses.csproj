@@ -1,7 +1,14 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <Authors>Casey Marquis</Authors>
+    <Company />
+    <PackageLicenseUrl>https://github.com/caseymarquis/KC.NanoProcesses/blob/master/LICENSE.md</PackageLicenseUrl>
+    <PackageProjectUrl>https://github.com/caseymarquis/KC.NanoProcesses</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/caseymarquis/KC.NanoProcesses</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
   </PropertyGroup>
 
 </Project>
