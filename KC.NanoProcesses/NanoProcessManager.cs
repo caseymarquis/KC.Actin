@@ -232,6 +232,7 @@ namespace KC.NanoProcesses
                 }
                 catch { }
             }
+            log.Error("", "NanoProcessLoopStarted", "");
             while (Running) {
                 try {
 
