@@ -24,10 +24,27 @@ namespace KC.NanoProcesses
         private object lockDependencies = new object();
         private Dictionary<Type, object> dependencies = new Dictionary<Type, object>();
 
+        public NPStandardLogger StandardLog;
+
         private INanoProcessLogger log = new EmptyNpLogger();
 
         public bool PrintRunningProcessesToConsoleIfDebug = true;
 
+        /// <summary>
+        /// This will create a standard logger which will write logs
+        /// to daily files at the specified directory.
+        /// </summary>
+        /// <param name="logDirectoryPath"></param>
+        public NanoProcessManager(string logDirectoryPath) {
+            this.StandardLog = new NPStandardLogger(logDirectoryPath);
+            this.log = this.StandardLog;
+            this.AddProcessAndDependency(this.StandardLog);
+        }
+
+        /// <summary>
+        /// Use this to create a custom logger.
+        /// </summary>
+        /// <param name="log"></param>
         public NanoProcessManager(INanoProcessLogger log) {
             this.log = log ?? this.log;
         }
