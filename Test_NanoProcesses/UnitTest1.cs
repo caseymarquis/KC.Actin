@@ -83,7 +83,7 @@ namespace Test_NanoProcesses
         [Fact]
         public async Task RunManualAndDIProcs()
         {
-            var manager = new NanoProcessManager(null);
+            var manager = new NanoProcessManager((INanoProcessLogger)null);
             var procManual = new ProcManual();
 #pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
             manager.Run(startUp: async (util) => {
