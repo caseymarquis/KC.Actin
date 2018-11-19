@@ -135,6 +135,7 @@ namespace KC.NanoProcesses
             try {
                 var util = updateUtil(new NpUtil());
                 //Do manual start up:
+                log.Error("", "NanoProcessLoopStarting", "");
                 await startUp(util);
 
                 //Do automated DI startup:
