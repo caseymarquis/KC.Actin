@@ -97,6 +97,7 @@ namespace KC.NanoProcesses
 
         private bool shuttingDown = false;
         public void Dispose() {
+            this.log?.Error("Shutdown", "NanoProcessLoopShutdown", "Shutdown");
             lock (lockRunning) {
                 if (shuttingDown) {
                     return;
@@ -128,14 +129,14 @@ namespace KC.NanoProcesses
             }
 
             bool logFailedStartup(Exception ex) {
-                log.Error(null, "StartUp", ex);
+                log.Error("StartUp-Error", "StartUp", ex);
                 return false;
             }
 
             try {
                 var util = updateUtil(new NpUtil());
                 //Do manual start up:
-                log.Error("", "NanoProcessLoopStarting", "");
+                log.Error("StartUp", "NanoProcessLoopStarting", "Startup");
                 await startUp(util);
 
                 //Do automated DI startup:
