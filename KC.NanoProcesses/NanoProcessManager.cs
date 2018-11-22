@@ -13,7 +13,7 @@ namespace KC.NanoProcesses
         private object lockRunning = new object();
 
         //TODO: make configurable
-        private TimeSpan runLoopDelay = new TimeSpan(0, 0, 0, 0, 100);
+        private TimeSpan runLoopDelay = new TimeSpan(0, 0, 0, 0, 10);
 
         private object lockProcessPool = new object();
         private List<NanoProcess> processPool = new List<NanoProcess>();
