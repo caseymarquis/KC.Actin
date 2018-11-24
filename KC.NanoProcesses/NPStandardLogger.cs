@@ -15,6 +15,18 @@ namespace KC.NanoProcesses
         private object lockEverything = new object();
         private List<NpLog> queuedLogs = new List<NpLog>();
         private string logDir = null;
+        private bool m_LogToDisk = true;
+
+        public bool LogToDisk {
+            get {
+                lock (lockEverything)
+                    return m_LogToDisk;
+            }
+            set {
+                lock (lockEverything)
+                    m_LogToDisk = value;
+            }
+        }
 
         private object lockRealTimeCache = new object();
         private Queue<NpLog> realTimeCache = new Queue<NpLog>();
@@ -62,8 +74,17 @@ namespace KC.NanoProcesses
             location = location ?? "";
             message = message ?? "";
             var log = new NpLog(DateTime.Now, context, location, message, type);
+            var mustPrint = false;
             lock (lockEverything) {
-                queuedLogs.Add(log);
+                if (m_LogToDisk) {
+                    queuedLogs.Add(log);
+                }
+                else {
+                    mustPrint = true;
+                }
+            }
+            if (mustPrint) {
+                Console.WriteLine(log.ToString());
             }
         }
 
@@ -182,6 +203,10 @@ namespace KC.NanoProcesses
             Location = location;
             Message = message;
             Type = type;
+        }
+
+        public override string ToString() {
+            return $"{Time} | {Type ?? ""} | Location: {Location ?? ""} | Context: {Context ?? ""} | {Message ?? ""}";
         }
     }
 }
