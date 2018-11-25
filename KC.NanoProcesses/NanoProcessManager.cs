@@ -235,11 +235,12 @@ namespace KC.NanoProcesses
                 catch { }
             }
             log.Error("", "NanoProcessLoopStarted", "");
+            bool readkeyFailed = false;
             while (Running) {
                 try {
 
                     try {
-                        if (Environment.UserInteractive) {
+                        if (!readkeyFailed && Environment.UserInteractive) {
                             if (Console.KeyAvailable) {
                                 var key = Console.ReadKey(true).Key;
                                 if (key == ConsoleKey.Q || key == ConsoleKey.Escape) {
@@ -250,6 +251,7 @@ namespace KC.NanoProcesses
                         }
                     }
                     catch (Exception ex) {
+                        readkeyFailed = true;
                         safeLog("User Interactive Check", ex);
                     }
 
