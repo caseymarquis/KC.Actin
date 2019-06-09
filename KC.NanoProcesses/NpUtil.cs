@@ -7,7 +7,7 @@ namespace KC.NanoProcesses
 {
     public class NpUtil
     {
-        public DateTime UtcNow { get; set; }
+        public DateTimeOffset Now { get; set; }
         public INanoProcessLogger Log { get; set; } = new EmptyNpLogger();
     }
 }

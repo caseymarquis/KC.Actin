@@ -91,7 +91,7 @@ namespace KC.NanoProcesses
 
         private NpUtil updateUtil(NpUtil util) {
             util.Log = log;
-            util.UtcNow = DateTime.UtcNow;
+            util.Now = DateTimeOffset.Now;
             return util;
         }
 
@@ -112,7 +112,7 @@ namespace KC.NanoProcesses
             }
 
             var util = updateUtil(new NpUtil());
-            var utcNow = DateTime.UtcNow;
+            var now = DateTimeOffset.Now;
             foreach (var handle in handles) {
 #pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
                 handle.DisposeProcess(util);
@@ -223,7 +223,7 @@ namespace KC.NanoProcesses
             void printIfDebug(string msg) {
 #if DEBUG
                 if (PrintRunningProcessesToConsoleIfDebug) {
-                    Console.WriteLine($"{DateTime.Now.Second}: {msg}");
+                    Console.WriteLine($"{DateTimeOffset.Now.Second}: {msg}");
                 }
 #endif
             }
@@ -338,7 +338,7 @@ namespace KC.NanoProcesses
                                     });
 #pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
                                 }
-                                else if (process.ShouldBeRunNow(DateTime.UtcNow)) {
+                                else if (process.ShouldBeRunNow(DateTimeOffset.Now)) {
                                     printIfDebug("run-" + process.ProcessName);
 #pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
                                     process.Run(updateUtil(new NpUtil()));

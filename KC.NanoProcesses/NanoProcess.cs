@@ -44,7 +44,7 @@ namespace KC.NanoProcesses {
         protected abstract Task OnDispose(NpUtil util);
 
         private object lockEverything = new object();
-        DateTime lastRanUtc = DateTime.MinValue;
+        DateTimeOffset lastRanUtc = DateTimeOffset.MinValue;
         bool wasInit = false;
         bool initSuccessful = false;
         bool initStarted = false;
@@ -52,7 +52,7 @@ namespace KC.NanoProcesses {
 
         private SemaphoreSlim ensureRunIsSynchronous = new SemaphoreSlim(1, 1);
 
-        public bool ShouldBeRunNow(DateTime utcNow) {
+        public bool ShouldBeRunNow(DateTimeOffset utcNow) {
             lock (lockEverything) {
                 if (disposing) {
                     return false;
@@ -164,7 +164,7 @@ namespace KC.NanoProcesses {
                     lock (lockEverything) {
                         isRunning = false;
                         watch.Stop();
-                        lastRanUtc = util.UtcNow.AddMilliseconds(watch.ElapsedMilliseconds);
+                        lastRanUtc = util.Now.AddMilliseconds(watch.ElapsedMilliseconds);
                     }
                 }
             }

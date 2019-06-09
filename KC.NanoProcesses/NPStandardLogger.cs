@@ -45,7 +45,7 @@ namespace KC.NanoProcesses
         }
 
         private FileInfo getTodaysLogFile() {
-            var fileName = DateTime.Now.ToString("yyyy-MM-dd") + ".xml";
+            var fileName = DateTimeOffset.Now.ToString("yyyy-MM-dd") + ".xml";
             var fileInfo = new FileInfo(Path.Combine(this.logDir, fileName));
             return fileInfo;
         }
@@ -73,7 +73,7 @@ namespace KC.NanoProcesses
             context = context ?? "";
             location = location ?? "";
             message = message ?? "";
-            var log = new NpLog(DateTime.Now, context, location, message, type);
+            var log = new NpLog(DateTimeOffset.Now, context, location, message, type);
             var mustPrint = false;
             lock (lockEverything) {
                 if (m_LogToDisk) {
@@ -89,7 +89,7 @@ namespace KC.NanoProcesses
         }
 
         public void RealTime(string context, string location, string message) {
-            var now = DateTime.Now;
+            var now = DateTimeOffset.Now;
             lock (lockRealTimeCache) {
                 while (realTimeCache.Count > maxRealTimeLogs) {
                     realTimeCache.Dequeue();
@@ -191,14 +191,14 @@ namespace KC.NanoProcesses
     }
 
     public struct NpLog {
-        public DateTime Time;
+        public DateTimeOffset Time;
         public string Context;
         public string Location;
         public string Message;
         public string Type;
 
-        public NpLog(DateTime utcNow, string context, string location, string message, string type) : this() {
-            Time = utcNow;
+        public NpLog(DateTimeOffset now, string context, string location, string message, string type) : this() {
+            Time = now;
             Context = context;
             Location = location;
             Message = message;
