@@ -1,14 +1,12 @@
-﻿using KC.NanoProcesses.Internal;
+﻿using KC.Actin.Internal;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 
-namespace KC.NanoProcesses
-{
-    public class NanoProcessManager : IDisposable
-    {
+namespace KC.Actin {
+    public class Director : IDisposable {
         private bool __running__ = false;
         private object lockRunning = new object();
 
@@ -16,36 +14,36 @@ namespace KC.NanoProcesses
         private TimeSpan runLoopDelay = new TimeSpan(0, 0, 0, 0, 10);
 
         private object lockProcessPool = new object();
-        private List<NanoProcess> processPool = new List<NanoProcess>();
+        private List<Actor_SansType> processPool = new List<Actor_SansType>();
 
         private object lockDisposeHandles = new object();
-        private List<NanoProcessDisposeHandle> disposeHandles = new List<NanoProcessDisposeHandle>();
+        private List<ActorDisposeHandle> disposeHandles = new List<ActorDisposeHandle>();
 
         private object lockDependencies = new object();
         private Dictionary<Type, object> dependencies = new Dictionary<Type, object>();
 
-        public NPStandardLogger StandardLog;
+        public ActinStandardLogger StandardLog;
 
-        private INanoProcessLogger log = new EmptyNpLogger();
+        private IActinLogger log = new EmptyNpLogger();
 
-        public bool PrintRunningProcessesToConsoleIfDebug = true;
+        public bool PrintGraphToDebug = true;
 
         /// <summary>
         /// This will create a standard logger which will write logs
         /// to daily files at the specified directory.
         /// </summary>
         /// <param name="logDirectoryPath"></param>
-        public NanoProcessManager(string logDirectoryPath) {
-            this.StandardLog = new NPStandardLogger(logDirectoryPath);
+        public Director(string logDirectoryPath) {
+            this.StandardLog = new ActinStandardLogger(logDirectoryPath);
             this.log = this.StandardLog;
-            this.AddProcessAndDependency(this.StandardLog);
+            this.AddAsActorAndDependency(this.StandardLog);
         }
 
         /// <summary>
         /// Use this to create a custom logger.
         /// </summary>
         /// <param name="log"></param>
-        public NanoProcessManager(INanoProcessLogger log) {
+        public Director(IActinLogger log) {
             this.log = log ?? this.log;
         }
 
@@ -57,13 +55,13 @@ namespace KC.NanoProcesses
             }
         }
 
-        public void AddProcessAndDependency(NanoProcess process) {
-            this.AddProcess(process);
-            this.AddDependency(process);
+        public void AddAsActorAndDependency(Actor actor) {
+            this.AddActor(actor);
+            this.AddDependency(actor);
         }
 
-        public void AddProcess(NanoProcess process) {
-            if (process != null) {
+        public void AddActor(Actor actor) {
+            if (actor != null) {
                 lock (lockDisposeHandles) {
                     if (disposeHandles == null) {
                         //Means we started shutting down.
@@ -71,7 +69,7 @@ namespace KC.NanoProcesses
                     }
                 }
                 lock (lockProcessPool) {
-                    processPool.Add(process);
+                    processPool.Add(actor);
                 }
             }
         }
@@ -83,13 +81,13 @@ namespace KC.NanoProcesses
             lock (lockDependencies) {
                 var t = d.GetType();
                 if (dependencies.ContainsKey(t)) {
-                    throw new ApplicationException("NanoDI Dependency was added more than once.");
+                    throw new ApplicationException("Actin Dependency was added more than once.");
                 }
                 dependencies[t] = d;
             }
         }
 
-        private NpUtil updateUtil(NpUtil util) {
+        private ActorUtil updateUtil(ActorUtil util) {
             util.Log = log;
             util.Now = DateTimeOffset.Now;
             return util;
@@ -97,7 +95,7 @@ namespace KC.NanoProcesses
 
         private bool shuttingDown = false;
         public void Dispose() {
-            this.log?.Error("Shutdown", "NanoProcessLoopShutdown", "Shutdown");
+            this.log?.Error("Shutdown", "ActinLoopShutdown", "Shutdown");
             lock (lockRunning) {
                 if (shuttingDown) {
                     return;
@@ -105,13 +103,13 @@ namespace KC.NanoProcesses
                 shuttingDown = true;
                 __running__ = false;
             }
-            List<NanoProcessDisposeHandle> handles = null;
+            List<ActorDisposeHandle> handles = null;
             lock (lockDisposeHandles) {
                 handles = disposeHandles;
                 disposeHandles = null;
             }
 
-            var util = updateUtil(new NpUtil());
+            var util = updateUtil(new ActorUtil());
             var now = DateTimeOffset.Now;
             foreach (var handle in handles) {
 #pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
@@ -120,7 +118,7 @@ namespace KC.NanoProcesses
             }
         }
 
-        public async Task Run(Func<NpUtil, Task> startUp, params Assembly[] assembliesToCheckForDI) {
+        public async Task Run(Func<ActorUtil, Task> startUp, bool startUp_loopUntilSucceeds, params Assembly[] assembliesToCheckForDI) {
             lock (lockRunning) {
                 if (__running__) {
                     return;
@@ -134,10 +132,44 @@ namespace KC.NanoProcesses
             }
 
             try {
-                var util = updateUtil(new NpUtil());
+                var util = updateUtil(new ActorUtil());
                 //Do manual start up:
-                log.Error("StartUp", "NanoProcessLoopStarting", "Startup");
-                await startUp(util);
+                log.Error("StartUp", "DirectorLoopStarting", "Startup");
+                if (!startUp_loopUntilSucceeds) {
+                    await startUp(util);
+                }
+                else {
+                    while (true) {
+                        try {
+                            updateUtil(util);
+                            await startUp(util);
+                            break;
+                        }
+                        catch (Exception ex) {
+                            log.Error("Critical Start Failed", "Critical Start Failed: Will try again.", ex);
+                            try {
+                                //https://github.com/dotnet/csharplang/issues/35
+                                var logActor = log as Actor;
+                                if (logActor != null) {
+                                    util = updateUtil(util);
+                                    await logActor.Run(util);
+                                }
+                            }
+                            catch {
+                                var delayInterval = 100;
+                                var retryInterval = 5000;
+                                for (int ellapsedTime = 0; ellapsedTime < retryInterval; ellapsedTime += delayInterval) {
+                                    await Task.Delay(delayInterval);
+                                    lock (lockRunning) {
+                                        if (!__running__) {
+                                            return;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
 
                 //Do automated DI startup:
                 var assem = assembliesToCheckForDI;
@@ -149,26 +181,26 @@ namespace KC.NanoProcesses
                 foreach (var a in assem) {
                     try {
                         foreach (var t in a.GetTypes()) {
-                            var nanoDiAttribute = Attribute.GetCustomAttribute(t, typeof(NanoDIAttribute));
-                            if (nanoDiAttribute != null) {
+                            var singletonAttribute = Attribute.GetCustomAttribute(t, typeof(SingletonAttribute));
+                            if (singletonAttribute != null) {
                                 var cd = new CachedDIData() {
                                     T = t,
                                 };
                                 var cons = t.GetConstructors();
                                 if (cons.Length == 0) {
-                                    throw new Exception($"{t.Name} has no public constructors.");
+                                    throw new ApplicationException($"{t.Name} has no public constructors.");
                                 }
-                                else if(cons.Length > 1) {
-                                    throw new Exception($"{t.Name} has more than 1 public constructor.");
+                                if (cd.Con.GetParameters().Any()) {
+                                    throw new ApplicationException($"{t.Name}'s public constructor has parameters.");
+                                    //In theory we could deal with this in a variety of ways, but it's easier/cleaner to just forbid
+                                    //parameters to make member based DI the standard, and prevent confusion.
                                 }
-                                cd.Con = cons.First();
-                                cd.Params = cd.Con.GetParameters();
                                 toAdd.Add(cd);
                             }
                         }
                     }
                     catch (Exception ex) {
-                        throw new Exception($"NanoDI Failed in assembly {a.FullName}. See inner exception for details.", ex);
+                        throw new Exception($"Actin Failed in assembly {a.FullName}. See inner exception for details.", ex);
                     }
                 }
 
@@ -177,28 +209,12 @@ namespace KC.NanoProcesses
                         //Instantiate everything with a parameterless constructor:
                         var toRemove = new List<CachedDIData>();
                         foreach (var cd in toAdd) {
-                            var args = new List<object>();
-                            var missingArg = false;
-                            foreach (var neededArg in cd.Params) {
-                                lock (lockDependencies) {
-                                    var neededType = neededArg.ParameterType;
-                                    if (!dependencies.ContainsKey(neededType)) {
-                                        missingArg = true;
-                                        break;
-                                    }
-                                    args.Add(dependencies[neededType]);
-                                }
-                            }
-                            if (missingArg) {
-                                continue;
-                            }
-
                             toRemove.Add(cd);
 
-                            var instance = Activator.CreateInstance(cd.T, args.ToArray());
+                            var instance = Activator.CreateInstance(cd.T);
                             this.AddDependency(instance);
-                            if (cd.T.IsSubclassOf(typeof(NanoProcess))) {
-                                this.AddProcess((NanoProcess)instance);
+                            if (cd.T.IsSubclassOf(typeof(Actor))) {
+                                this.AddActor((Actor)instance);
                             }
                         }
                         foreach (var cd in toRemove) {
@@ -206,23 +222,23 @@ namespace KC.NanoProcesses
                         }
 
                         if (toRemove.Count == 0) {
-                            throw new Exception($"Unable to instantiate class {toAdd.First().T.Name} using NanoDI. All constructor parameters must be marked with NanoDIAttribute or be added manually with NanoProcessManager.AddDependency()");
+                            throw new Exception($"Unable to instantiate class {toAdd.First().T.Name} using Actin. All constructor parameters must be marked with NanoDIAttribute or be added manually with NanoProcessManager.AddDependency()");
                         }
                     }
                 }
                 catch (Exception ex) {
-                    throw new Exception($"NanoDI Failed. See inner exception for details.", ex);
+                    throw new Exception($"Actin Failed. See inner exception for details.", ex);
                 }
             }
-            catch (Exception ex) when(logFailedStartup(ex)){
+            catch (Exception ex) when (logFailedStartup(ex)) {
                 //Exception is always unhandled, this is a nicer way to ensure logging before the exception propagates.
             }
 
-            var poolCopy = new List<NanoProcess>();
+            var poolCopy = new List<Actor_SansType>();
 
             void printIfDebug(string msg) {
 #if DEBUG
-                if (PrintRunningProcessesToConsoleIfDebug) {
+                if (PrintGraphToDebug) {
                     Console.WriteLine($"{DateTimeOffset.Now.Second}: {msg}");
                 }
 #endif
@@ -234,7 +250,7 @@ namespace KC.NanoProcesses
                 }
                 catch { }
             }
-            log.Error("", "NanoProcessLoopStarted", "");
+            log.Error("", "ActinLoopStarted", "");
             bool readkeyFailed = false;
             while (Running) {
                 try {
@@ -280,19 +296,19 @@ namespace KC.NanoProcesses
                         safeLog("Process Pool Pruning", ex);
                     }
 
-                    List<NanoProcessDisposeHandle> handles = null;
+                    List<ActorDisposeHandle> handles = null;
                     lock (lockDisposeHandles) {
                         handles = disposeHandles;
                     }
 
                     try {
-                        var remainingHandles = new List<NanoProcessDisposeHandle>();
+                        var remainingHandles = new List<ActorDisposeHandle>();
                         if (handles != null) {
                             foreach (var handle in handles) {
                                 if (handle.MustDispose) {
                                     printIfDebug("dispose-" + handle.ProcessName);
 #pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-                                    handle.DisposeProcess(updateUtil(new NpUtil()));
+                                    handle.DisposeProcess(updateUtil(new ActorUtil()));
 #pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
                                 }
                                 else {
@@ -314,9 +330,9 @@ namespace KC.NanoProcesses
                         foreach (var process in poolCopy) {
                             try {
                                 if (process.ShouldBeInit) {
-                                    printIfDebug("init-" + process.ProcessName);
+                                    printIfDebug("init-" + process.ActorName);
 #pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-                                    process.Init(updateUtil(new NpUtil())).ContinueWith(async task => {
+                                    process.Init(updateUtil(new ActorUtil())).ContinueWith(async task => {
                                         if (task.Status == TaskStatus.RanToCompletion) {
                                             if (task.Result != null) {
                                                 var handle = task.Result;
@@ -331,7 +347,7 @@ namespace KC.NanoProcesses
                                                     }
                                                 }
                                                 if (mustDisposeNow) {
-                                                    await handle.DisposeProcess(updateUtil(new NpUtil()));
+                                                    await handle.DisposeProcess(updateUtil(new ActorUtil()));
                                                 }
                                             }
                                         }
@@ -339,9 +355,9 @@ namespace KC.NanoProcesses
 #pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
                                 }
                                 else if (process.ShouldBeRunNow(DateTimeOffset.Now)) {
-                                    printIfDebug("run-" + process.ProcessName);
+                                    printIfDebug("run-" + process.ActorName);
 #pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-                                    process.Run(updateUtil(new NpUtil()));
+                                    process.Run(updateUtil(new ActorUtil()));
 #pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
                                 }
                             }

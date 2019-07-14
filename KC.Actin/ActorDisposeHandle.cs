@@ -3,19 +3,19 @@ using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace KC.NanoProcesses
+namespace KC.Actin
 {
-    public class NanoProcessDisposeHandle
+    public class ActorDisposeHandle
     {
-        Func<NpUtil, Task> actuallyDisposeProcess;
-        private NanoProcess process; //This is really just here for debugging. It's not used for anything.
+        Func<ActorUtil, Task> actuallyDisposeProcess;
+        private Actor_SansType process; //This is really just here for debugging. It's not used for anything.
 
-        public NanoProcessDisposeHandle(Func<NpUtil, Task> _actuallyDisposeProcess, NanoProcess _process) {
+        public ActorDisposeHandle(Func<ActorUtil, Task> _actuallyDisposeProcess, Actor_SansType _process) {
             this.actuallyDisposeProcess = _actuallyDisposeProcess;
             this.process = _process;
         }
 
-        public async Task DisposeProcess(NpUtil util) {
+        public async Task DisposeProcess(ActorUtil util) {
             await actuallyDisposeProcess(util);
         }
 
@@ -34,6 +34,6 @@ namespace KC.NanoProcesses
             }
         }
 
-        public string ProcessName => process?.ProcessName ?? "null";
+        public string ProcessName => process?.ActorName ?? "null";
     }
 }

@@ -1,24 +1,24 @@
-using KC.NanoProcesses;
+using KC.Actin;
 using System;
 using System.Reflection;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace Test_NanoProcesses
+namespace Test.Actin
 {
 
-    public class ProcManual : NanoProcess {
-        public override string ProcessName => nameof(ProcManual);
+    public class ProcManual : Actor {
+        public override string ActorName => nameof(ProcManual);
         protected override TimeSpan RunDelay => new TimeSpan(0, 0, 0, 0, 10);
-        protected async override Task OnDispose(NpUtil util) {
+        protected async override Task OnDispose(ActorUtil util) {
             await Task.FromResult(0);
             return;
         }
-        protected async override Task OnInit(NpUtil util) {
+        protected async override Task OnInit(ActorUtil util) {
             await Task.FromResult(0);
             return;
         }
-        protected async override Task OnRun(NpUtil util) {
+        protected async override Task OnRun(ActorUtil util) {
             this.ManualRan = true;
             await Task.FromResult(0);
             return;
@@ -54,24 +54,24 @@ namespace Test_NanoProcesses
         }
     }
 
-    [NanoDI]
-    public class ProcDI : NanoProcess{
+    [Singleton]
+    public class ProcDI : Actor{
         ProcManual procManual;
         public ProcDI(ProcManual _procManual) {
             this.procManual = _procManual;
         }
 
-        public override string ProcessName => nameof(ProcDI);
+        public override string ActorName => nameof(ProcDI);
         protected override TimeSpan RunDelay => new TimeSpan(0, 0, 0, 0, 10);
-        protected async override Task OnDispose(NpUtil util) {
+        protected async override Task OnDispose(ActorUtil util) {
             await Task.FromResult(0);
             return;
         }
-        protected async override Task OnInit(NpUtil util) {
+        protected async override Task OnInit(ActorUtil util) {
             await Task.FromResult(0);
             return;
         }
-        protected async override Task OnRun(NpUtil util) {
+        protected async override Task OnRun(ActorUtil util) {
             procManual.DIRan = true;
             await Task.FromResult(0);
             return;
@@ -83,11 +83,11 @@ namespace Test_NanoProcesses
         [Fact]
         public async Task RunManualAndDIProcs()
         {
-            var manager = new NanoProcessManager((INanoProcessLogger)null);
+            var manager = new Director((IActinLogger)null);
             var procManual = new ProcManual();
 #pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-            manager.Run(startUp: async (util) => {
-                manager.AddProcessAndDependency(procManual);
+            manager.Run(startUp_loopUntilSucceeds: false,startUp: async (util) => {
+                manager.AddAsActorAndDependency(procManual);
                 await Task.FromResult(0);
             }, assembliesToCheckForDI: Assembly.GetExecutingAssembly());
 #pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed

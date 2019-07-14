@@ -5,11 +5,11 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace KC.NanoProcesses
+namespace KC.Actin
 {
-    public class NPStandardLogger : NanoProcess, INanoProcessLogger
+    public class ActinStandardLogger : Actor, IActinLogger
     {
-        public override string ProcessName => nameof(NPStandardLogger);
+        public override string ActorName => nameof(ActinStandardLogger);
         protected override TimeSpan RunDelay => new TimeSpan(0, 0, 15);
 
         private object lockEverything = new object();
@@ -32,7 +32,7 @@ namespace KC.NanoProcesses
         private Queue<NpLog> realTimeCache = new Queue<NpLog>();
         private int maxRealTimeLogs = 1000;
 
-        public NPStandardLogger(string logDirectoryPath) {
+        public ActinStandardLogger(string logDirectoryPath) {
             logDir = logDirectoryPath;
         }
 
@@ -40,7 +40,7 @@ namespace KC.NanoProcesses
             get { return getTodaysLogFile().Exists; }
         }
 
-        protected async override Task OnInit(NpUtil util) {
+        protected async override Task OnInit(ActorUtil util) {
             await Task.FromResult(0);
         }
 
@@ -108,7 +108,7 @@ namespace KC.NanoProcesses
             }
         }
 
-        protected async override Task OnRun(NpUtil util) {
+        protected async override Task OnRun(ActorUtil util) {
             var toWrite = new List<NpLog>();
             lock (lockEverything) {
                 if (queuedLogs.Count == 0) {
@@ -184,7 +184,7 @@ namespace KC.NanoProcesses
             }
         }
 
-        protected async override Task OnDispose(NpUtil util) {
+        protected async override Task OnDispose(ActorUtil util) {
             //Make sure any final logs get written.
             await this.OnRun(util);
         }

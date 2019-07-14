@@ -5,35 +5,59 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace KC.NanoProcesses {
+namespace KC.Actin {
     /// <summary>
-    /// This is a container which is run periodically in the main application loop.
+    /// This is a container for an action which is run periodically in the main application loop.
     /// How often it's run is based on what its RunDelay() function returns.
     /// </summary>
-    public abstract class NanoProcess {
+    public abstract class Actor : Actor<Role, int> {
+        public Actor() { }
+    }
+
+    public abstract class Actor<TRole, TRoleId> : Actor_SansType where TRole : Role<TRoleId> {
+        public TRoleId Id { get; private set; }
+        public override string IdString => $"{Id}";
+
+        public Actor() : base() { }
+    }
+
+    public abstract class Actor_SansType : IDisposable {
+        public abstract string IdString { get; }
+
+        private string m_ActorName;
+        public Actor_SansType() {
+            m_ActorName = this.GetType().Name;
+        }
+
         /// <summary>
         /// If an unhandled error occurs in OnInit or OnRun,
         /// this name will be used for logging.
         /// </summary>
         /// <returns></returns>
-        public abstract string ProcessName { get; }
+        public virtual string ActorName {
+            get {
+                return m_ActorName;
+            }
+        }
         /// <summary>
         /// How often should OnRun be run?
         /// We only guarantee it won't be run more often than this delay.
         /// </summary>
         /// <returns></returns>
-        protected abstract TimeSpan RunDelay { get; }
+        protected virtual TimeSpan RunDelay => new TimeSpan(0, 0, 0, 0, 500);
         /// <summary>
         /// This is run once before the first time OnRun is run.
         /// If an exception is thrown here, OnRun will never start running,
         /// and this AppProcess will be removed from the running processes pool.
         /// </summary>
-        protected abstract Task OnInit(NpUtil util);
+        protected virtual async Task OnInit(ActorUtil util) {
+            await Task.FromResult(0);
+        }
         /// <summary>
         /// This is run at approximately RunDelay() intervals (probably slightly slower.).
         /// </summary>
         /// <returns></returns>
-        protected abstract Task OnRun(NpUtil util);
+        protected abstract Task OnRun(ActorUtil util);
 
         /// <summary>
         /// If KillProcess is called,
@@ -41,7 +65,9 @@ namespace KC.NanoProcesses {
         /// is removed from the process pool.
         /// </summary>
         /// <returns></returns>
-        protected abstract Task OnDispose(NpUtil util);
+        protected virtual async Task OnDispose(ActorUtil util) {
+            await Task.FromResult(0);
+        }
 
         private object lockEverything = new object();
         DateTimeOffset lastRanUtc = DateTimeOffset.MinValue;
@@ -109,7 +135,7 @@ namespace KC.NanoProcesses {
             }
         }
 
-        public async Task<NanoProcessDisposeHandle> Init(NpUtil util) {
+        public async Task<ActorDisposeHandle> Init(ActorUtil util) {
             lock (lockEverything) {
                 if (this.initStarted) {
                     return null;
@@ -128,7 +154,7 @@ namespace KC.NanoProcesses {
                     lock (lockEverything) {
                         this.initSuccessful = false;
                     }
-                    util.Log.Error(this.ProcessName, "EventLoop.OnInit()", ex);
+                    util.Log.Error(this.ActorName, "EventLoop.OnInit()", ex);
                     return null;
                 }
                 finally {
@@ -137,7 +163,7 @@ namespace KC.NanoProcesses {
                     }
                 }
                 lock (lockEverything) {
-                    this.disposeHandle = new NanoProcessDisposeHandle(this.ActuallyDispose, this);
+                    this.disposeHandle = new ActorDisposeHandle(this.ActuallyDispose, this);
                     return this.disposeHandle;
                 }
             }
@@ -147,7 +173,7 @@ namespace KC.NanoProcesses {
         }
 
         private Stopwatch watch = new Stopwatch();
-        public async Task Run(NpUtil util) {
+        public async Task Run(ActorUtil util) {
             lock (lockEverything) {
                 isRunning = true;
                 watch.Restart();
@@ -158,7 +184,7 @@ namespace KC.NanoProcesses {
                     await OnRun(util);
                 }
                 catch (Exception ex) {
-                    util.Log.Error(this.ProcessName, "EventLoop.OnRun()", ex);
+                    util.Log.Error(this.ActorName, "EventLoop.OnRun()", ex);
                 }
                 finally {
                     lock (lockEverything) {
@@ -174,7 +200,7 @@ namespace KC.NanoProcesses {
         }
 
         private bool disposing = false;
-        private NanoProcessDisposeHandle disposeHandle;
+        private ActorDisposeHandle disposeHandle;
         public void Dispose() {
             lock (lockEverything) {
                 if (this.disposeHandle != null) {
@@ -184,7 +210,7 @@ namespace KC.NanoProcesses {
             }
         }
 
-        private async Task ActuallyDispose(NpUtil util) {
+        private async Task ActuallyDispose(ActorUtil util) {
             lock (lockEverything) {
                 if (disposing) {
                     return;
@@ -197,7 +223,7 @@ namespace KC.NanoProcesses {
                     await OnDispose(util);
                 }
                 catch (Exception ex) {
-                    util.Log.Error(this.ProcessName, "EventLoop.OnDispose()", ex);
+                    util.Log.Error(this.ActorName, "EventLoop.OnDispose()", ex);
                 }
             }
             finally {

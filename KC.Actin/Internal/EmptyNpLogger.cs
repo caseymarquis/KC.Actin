@@ -2,9 +2,9 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace KC.NanoProcesses.Internal
+namespace KC.Actin.Internal
 {
-    public class EmptyNpLogger : INanoProcessLogger {
+    public class EmptyNpLogger : IActinLogger {
         public void Error(string context, string location, string message) {
         }
 
