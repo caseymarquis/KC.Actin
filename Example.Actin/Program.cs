@@ -106,7 +106,7 @@ namespace Example.Actin
     //A non-singleton dependency must be marked with the Peer attribute so that we know to
     //cache its creation information on start up. While there are ways around this,
     //I think it's more consistent if this is explicit.
-    [Peer]
+    [Instance]
     class PeerOne : Actor {
         //A dependency marked with Peer will be created once for each set of peers that it has.
         //When any peer is disposed, all related peers will automatically be disposed along with it.
@@ -128,7 +128,7 @@ namespace Example.Actin
         }
     }
 
-    [Peer]
+    [Instance]
     class PeerTwo : Actor {
         //Since PeerTwo is created as a dependency of PeerOne,
         //and PeerThree is a dependency of PeerOne,
@@ -147,7 +147,7 @@ namespace Example.Actin
         }
     }
 
-    [Peer]
+    [Instance]
     class PeerThree : Actor {
         public MessageQueue<int> Work = new MessageQueue<int>();
 
@@ -187,14 +187,14 @@ namespace Example.Actin
         }
     }
 
-    [Peer]
+    [Instance]
     class PeerIncrement : TransformNumber {
         protected override async Task<int> Transform(ActorUtil util, int x) {
             return await Task.FromResult(++x);
         }
     }
 
-    [Peer]
+    [Instance]
     class PeerDecrement : TransformNumber {
         protected override async Task<int> Transform(ActorUtil util, int x) {
             return await Task.FromResult(--x);
@@ -236,7 +236,7 @@ namespace Example.Actin
         }
     }
 
-    [Peer]
+    [Instance]
     class AnActorWithCustomizedTypes : Actor<Role<long>, long>
     {
         protected override Task OnRun(ActorUtil util)

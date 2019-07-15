@@ -19,8 +19,11 @@ namespace KC.Actin {
         private object lockDisposeHandles = new object();
         private List<ActorDisposeHandle> disposeHandles = new List<ActorDisposeHandle>();
 
-        private object lockDependencies = new object();
-        private Dictionary<Type, object> dependencies = new Dictionary<Type, object>();
+        private object lockSingletonDependencies = new object();
+        private Dictionary<Type, InstanceWithInstantiator> singletonDependencies = new Dictionary<Type, InstanceWithInstantiator>();
+
+        private object lockInstantiators = new object();
+        private Dictionary<Type, ActinInstantiator> instantiators = new Dictionary<Type, ActinInstantiator>();
 
         public ActinStandardLogger StandardLog;
 
@@ -36,7 +39,7 @@ namespace KC.Actin {
         public Director(string logDirectoryPath) {
             this.StandardLog = new ActinStandardLogger(logDirectoryPath);
             this.log = this.StandardLog;
-            this.AddAsActorAndDependency(this.StandardLog);
+            this.addActor(this.StandardLog);
         }
 
         /// <summary>
@@ -55,12 +58,7 @@ namespace KC.Actin {
             }
         }
 
-        public void AddAsActorAndDependency(Actor actor) {
-            this.AddActor(actor);
-            this.AddDependency(actor);
-        }
-
-        public void AddActor(Actor actor) {
+        private void addActor(Actor_SansType actor) {
             if (actor != null) {
                 lock (lockDisposeHandles) {
                     if (disposeHandles == null) {
@@ -74,17 +72,20 @@ namespace KC.Actin {
             }
         }
 
-        public void AddDependency(object d) {
+        public bool AddSingletonDependency(object d, ActinInstantiator instantiator = null) {
             if (d == null) {
-                throw new ArgumentNullException(nameof(AddDependency));
+                throw new ArgumentNullException(nameof(AddSingletonDependency));
             }
-            lock (lockDependencies) {
+            lock (lockSingletonDependencies) {
                 var t = d.GetType();
-                if (dependencies.ContainsKey(t)) {
-                    throw new ApplicationException("Actin Dependency was added more than once.");
+                if (singletonDependencies.ContainsKey(t)) {
+                    return false;
                 }
-                dependencies[t] = d;
+                else {
+                    singletonDependencies[t] = new InstanceWithInstantiator { Instance = d, Instantiator = instantiator };
+                }
             }
+            return true;
         }
 
         private ActorUtil updateUtil(ActorUtil util) {
@@ -128,11 +129,27 @@ namespace KC.Actin {
 
             bool logFailedStartup(Exception ex) {
                 log.Error("StartUp-Error", "StartUp", ex);
+                runLogNow().Wait();
                 return false;
             }
 
+            var util = updateUtil(new ActorUtil());
+            async Task runLogNow() {
+                try {
+                    //https://github.com/dotnet/csharplang/issues/35
+                    var logActor = log as Actor;
+                    if (logActor != null) {
+                        util = updateUtil(util);
+                        await logActor.Run(util);
+                    }
+                }
+                catch {
+                    //Nowhere to put this if the log is failing.
+                }
+            }
+
             try {
-                var util = updateUtil(new ActorUtil());
+                this.AddSingletonDependency(this);
                 //Do manual start up:
                 log.Error("StartUp", "DirectorLoopStarting", "Startup");
                 if (!startUp_loopUntilSucceeds) {
@@ -147,23 +164,14 @@ namespace KC.Actin {
                         }
                         catch (Exception ex) {
                             log.Error("Critical Start Failed", "Critical Start Failed: Will try again.", ex);
-                            try {
-                                //https://github.com/dotnet/csharplang/issues/35
-                                var logActor = log as Actor;
-                                if (logActor != null) {
-                                    util = updateUtil(util);
-                                    await logActor.Run(util);
-                                }
-                            }
-                            catch {
-                                var delayInterval = 100;
-                                var retryInterval = 5000;
-                                for (int ellapsedTime = 0; ellapsedTime < retryInterval; ellapsedTime += delayInterval) {
-                                    await Task.Delay(delayInterval);
-                                    lock (lockRunning) {
-                                        if (!__running__) {
-                                            return;
-                                        }
+                            await runLogNow();
+                            var delayInterval = 100;
+                            var retryInterval = 5000;
+                            for (int ellapsedTime = 0; ellapsedTime < retryInterval; ellapsedTime += delayInterval) {
+                                await Task.Delay(delayInterval);
+                                lock (lockRunning) {
+                                    if (!__running__) {
+                                        return;
                                     }
                                 }
                             }
@@ -177,52 +185,42 @@ namespace KC.Actin {
                     assem = new Assembly[] { Assembly.GetEntryAssembly() };
                 }
 
-                var toAdd = new List<CachedDIData>();
+                var instantiatorsList = new List<ActinInstantiator>();
                 foreach (var a in assem) {
                     try {
                         foreach (var t in a.GetTypes()) {
-                            var singletonAttribute = Attribute.GetCustomAttribute(t, typeof(SingletonAttribute));
-                            if (singletonAttribute != null) {
-                                var cd = new CachedDIData() {
-                                    T = t,
-                                };
-                                var cons = t.GetConstructors();
-                                if (cons.Length == 0) {
-                                    throw new ApplicationException($"{t.Name} has no public constructors.");
-                                }
-                                if (cd.Con.GetParameters().Any()) {
-                                    throw new ApplicationException($"{t.Name}'s public constructor has parameters.");
-                                    //In theory we could deal with this in a variety of ways, but it's easier/cleaner to just forbid
-                                    //parameters to make member based DI the standard, and prevent confusion.
-                                }
-                                toAdd.Add(cd);
+                            var instantiator = new ActinInstantiator(t);
+                            if (instantiator.Eligible) {
+                                instantiatorsList.Add(instantiator);
                             }
                         }
                     }
                     catch (Exception ex) {
-                        throw new Exception($"Actin Failed in assembly {a.FullName}. See inner exception for details.", ex);
+                        var msg = $"Actin Failed in assembly {a.FullName}. See inner exception for details.";
+                        util.Log.Error(null, msg, ex);
+                        await runLogNow();
+                        throw new Exception(msg, ex);
+                    }
+                }
+
+                lock (lockInstantiators) {
+                    foreach (var instantiator in instantiatorsList) {
+                        this.instantiators.Add(instantiator.Type, instantiator);
                     }
                 }
 
                 try {
-                    while (toAdd.Count > 0) {
-                        //Instantiate everything with a parameterless constructor:
-                        var toRemove = new List<CachedDIData>();
-                        foreach (var cd in toAdd) {
-                            toRemove.Add(cd);
-
-                            var instance = Activator.CreateInstance(cd.T);
-                            this.AddDependency(instance);
-                            if (cd.T.IsSubclassOf(typeof(Actor))) {
-                                this.AddActor((Actor)instance);
+                    foreach (var singletonInstantiator in instantiatorsList.Where(x => x.IsSingleton)) {
+                        var instance = singletonInstantiator.CreateNew();
+                        if (AddSingletonDependency(instance)) {
+                            singletonInstantiator.ResolveDependencies(instance, this);
+                            if (singletonInstantiator.IsActor) {
+                                addActor((Actor_SansType)instance);
                             }
                         }
-                        foreach (var cd in toRemove) {
-                            toAdd.Remove(cd);
-                        }
-
-                        if (toRemove.Count == 0) {
-                            throw new Exception($"Unable to instantiate class {toAdd.First().T.Name} using Actin. All constructor parameters must be marked with NanoDIAttribute or be added manually with NanoProcessManager.AddDependency()");
+                        else {
+                            //this means the singleton already exists, which means it was added manually,
+                            //or it was added through recursive dependency resolution.
                         }
                     }
                 }
@@ -233,7 +231,11 @@ namespace KC.Actin {
             catch (Exception ex) when (logFailedStartup(ex)) {
                 //Exception is always unhandled, this is a nicer way to ensure logging before the exception propagates.
             }
+            await runMainLoop();
+        }
 
+        //Main Loop ======================= Main Loop:
+        async Task runMainLoop() {
             var poolCopy = new List<Actor_SansType>();
 
             void printIfDebug(string msg) {
