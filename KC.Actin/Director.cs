@@ -58,7 +58,7 @@ namespace KC.Actin {
             }
         }
 
-        private void addActor(Actor_SansType actor) {
+        internal void AddActor(Actor_SansType actor) {
             if (actor != null) {
                 lock (lockDisposeHandles) {
                     if (disposeHandles == null) {
@@ -214,9 +214,6 @@ namespace KC.Actin {
                         var instance = singletonInstantiator.CreateNew();
                         if (AddSingletonDependency(instance)) {
                             singletonInstantiator.ResolveDependencies(instance, this);
-                            if (singletonInstantiator.IsActor) {
-                                addActor((Actor_SansType)instance);
-                            }
                         }
                         else {
                             //this means the singleton already exists, which means it was added manually,
@@ -225,7 +222,7 @@ namespace KC.Actin {
                     }
                 }
                 catch (Exception ex) {
-                    throw new Exception($"Actin Failed. See inner exception for details.", ex);
+                    throw new ApplicationException($"Actin Failed. See inner exception for details.", ex);
                 }
             }
             catch (Exception ex) when (logFailedStartup(ex)) {

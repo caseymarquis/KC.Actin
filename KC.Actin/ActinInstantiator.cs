@@ -1,4 +1,5 @@
-﻿using System;
+﻿using KC.Ricochet;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -11,6 +12,10 @@ namespace KC.Actin {
         public readonly bool IsActor;
         public readonly bool Eligible;
         public readonly Type Type;
+        public readonly Instantiator Instantiator;
+        public readonly PropertyAndFieldAccessor[] SingletonDependencies;
+        public readonly PropertyAndFieldAccessor[] PeerDependencies;
+        public readonly PropertyAndFieldAccessor[] InstanceDependencies;
 
         public Func<object> GetNew;
 
@@ -25,26 +30,36 @@ namespace KC.Actin {
                 return;
             }
 
-            var constructor = t.GetConstructors().Select(con => new {
-                Constructor = con,
-                Params = con.GetParameters(),
-            }).FirstOrDefault(con => con.Params.Length == 0);
-
-            if (constructor == null) {
-                //TODO: There's no reason we couldn't use a parameterless private constructor.
-                throw new ApplicationException($"{t.Name}'s has no parameterless public constructor.");
+            try {
+                Instantiator = Ricochet.Util.GetConstructor(t);
             }
+            catch (ApplicationException ex) {
+                throw new ApplicationException($"{t.Name}'s has no parameterless public constructor.", ex);
+            }
+
+            var allClassFields = Ricochet.Util.GetPropsAndFields(t, x => x.IsClass);
+            SingletonDependencies = allClassFields.Where(x => x.Markers.Contains(nameof(SingletonAttribute))).ToArray();
+            PeerDependencies = allClassFields.Where(x => x.Markers.Contains(nameof(PeerAttribute))).ToArray();
+            InstanceDependencies = allClassFields.Where(x => x.Markers.Contains(nameof(InstanceAttribute))).ToArray();
         }
 
         public object CreateNew() {
-            //TODO: Replace this with a compiled version which is created in our constructor.
-            //This will greatly improve performance.
-            return Activator.CreateInstance(Type);
+            return Instantiator.New();
         }
 
         public void ResolveDependencies(object instance, Director director, bool fakeDependencies = false) {
             //TODO: If fakeDependencies is true, then proxy classes should be created for all dependencies.
             //In theory we could somehow decide which dependencies to fake, but I'll deal with that rabbit hole later.
+            foreach (var dependency in SingletonDependencies) {
+                var currentValue = dependency.GetVal(instance);
+                if (currentValue == null) {
+                    var dependencyInstantiator = director.
+                }
+            }
+
+            if (IsActor) {
+                director.
+            }
             throw new NotImplementedException();
         }
     }

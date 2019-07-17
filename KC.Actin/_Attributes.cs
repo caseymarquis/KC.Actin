@@ -13,7 +13,10 @@ namespace KC.Actin
     ///
     /// If this class is used on a field or property, then that field or property will be automatically initialized
     /// with the singleton instance.
-    public class SingletonAttribute : Attribute { }
+    public class SingletonAttribute : Ricochet.RicochetMark {
+        SingletonAttribute() : base(nameof(SingletonAttribute)){
+        }
+    }
 
     /// <summary>
     /// If this attribute is used on a class, then the class can be automatically instantiated by Actin.
@@ -26,7 +29,10 @@ namespace KC.Actin
     /// When an Actor is disposed, all of its Instance members are automatically disposed.
     /// When Instance members are disposed, the containing Actor is not disposed.
     /// </summary>
-    public class InstanceAttribute : Attribute { }
+    public class InstanceAttribute : Ricochet.RicochetMark {
+        InstanceAttribute() : base(nameof(InstanceAttribute)){
+        }
+    }
 
     /// <summary>
     /// If this attribute is used on a property or field within an Instance class,
@@ -35,5 +41,8 @@ namespace KC.Actin
     /// When an Actor is disposed, all of its Peer members are automatically disposed.
     /// When a Peer member is disposed, all Actors referencing it are also disposed.
     /// </summary>
-    public class PeerAttribute : Attribute { }
+    public class PeerAttribute : Ricochet.RicochetMark {
+        PeerAttribute() : base(nameof(PeerAttribute)){
+        }
+    }
 }
