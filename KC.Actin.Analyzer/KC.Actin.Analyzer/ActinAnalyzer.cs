@@ -98,7 +98,7 @@ namespace KC.Actin.Analyzer
         public static bool IncludeSingletonOrInstanceOrPeer(this ImmutableArray<AttributeData> attributes) {
             return attributes.Any(x =>
                 x.AttributeClass.Name.Equals(nameof(SingletonAttribute))
-                || x.AttributeClass.Name.Equals(nameof(PeerAttribute))
+                || x.AttributeClass.Name.Equals(nameof(SiblingAttribute))
                 || x.AttributeClass.Name.Equals(nameof(InstanceAttribute)));
         }
 

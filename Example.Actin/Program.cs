@@ -17,7 +17,7 @@ namespace Example.Actin
             //This will run until the user hits Q or Escape. (If Environment is interactive.)
             //Otherwise, it will run until director.Dispose() is called.
             //All Actors/Scenes marked with the Singleton attribute will be automatically created
-            //and passed their dependencies. Other actors should be 
+            //and passed their dependencies.
             director.Run(startUp_loopUntilSucceeds: true, startUp: async (util) => {
                 //Run special startup code if needed, and manually add processes or dependencies.
                 //This is useful if you need to do something like ensuring a database is migrated before
@@ -79,13 +79,13 @@ namespace Example.Actin
     }
 
     [Singleton]
-    class ASceneWithConcreteActors : Scene<PeerOne> {
+    class ASceneWithConcreteActors : Scene<CountAndPrint> {
         Random r = new Random();
         //This is run every 3 seconds by default, and is used to figure out which Actors need to be disposed or created:
-        protected override async Task<IEnumerable<Role>> CastActors(ActorUtil util, Dictionary<int, PeerOne> myActors) {
+        protected override async Task<IEnumerable<Role>> CastActors(ActorUtil util, Dictionary<int, CountAndPrint> myActors) {
             //Normally, you would check a database or some configuration data to figure out which Actors should be running.
             //We're just picking some random numbers instead. Ids can use types other than int. This is shown further down.
-            //Note that the Scene also has an Id type, and could itself be managed by another scene, or have its own peers.
+            //Note that the Scene also has an Id type, and could itself be managed by another scene, or have its own Instance dependencies.
 
             //If the list of Ids differs from the list of running actors, the scene will resolve that difference.
             return await Task.FromResult(new Role[] {
@@ -103,57 +103,74 @@ namespace Example.Actin
         }
     }
 
-    //A non-singleton dependency must be marked with the Peer attribute so that we know to
-    //cache its creation information on start up. While there are ways around this,
-    //I think it's more consistent if this is explicit.
+    //If a scene is going to instantiate
     [Instance]
-    class PeerOne : Actor {
-        //A dependency marked with Peer will be created once for each set of peers that it has.
-        //When any peer is disposed, all related peers will automatically be disposed along with it.
-        [Peer]
-        public PeerTwo PeerTwo { get; private set; }
-        [Peer]
-        private PeerThree peerThree { get; set; }
+    class CountAndPrint : Actor {
+        [Instance]
+        private PrintTwos printTwos;
+        [Instance]
+        private PrintThrees printThrees;
+        [Instance]
+        private PrintSomethingElse printSomethingElse;
 
         private int count = 0;
         protected override async Task OnRun(ActorUtil util) {
             count++;
             if (count % 2 == 0) {
-                PeerTwo.Work.Enqueue(count);
+                printTwos.Work.Enqueue(count);
             }
-            if (count % 3 == 0) {
-                peerThree.Work.Enqueue(count);
+            else if (count % 3 == 0) {
+                printThrees.Work.Enqueue(count);
             }
             await Task.FromResult(0);
         }
+
+        public void ReportNine() {
+            Console.WriteLine("Nine was reported.");
+        }
     }
 
-    [Instance]
-    class PeerTwo : Actor {
-        //Since PeerTwo is created as a dependency of PeerOne,
-        //and PeerThree is a dependency of PeerOne,
-        //the below PeerThree instance will be the same instance
-        //as that on the above PeerOne class.
-        [Peer]
-        public PeerThree peerThree { get; private set; }
-
+    class PrintTwos : Actor {
         public MessageQueue<int> Work = new MessageQueue<int>();
+
+        //This will be pulled from the matching instance dependency on the parent.
+        [Sibling] 
+        private PrintSomethingElse printSomethingElse;
 
         protected override async Task OnRun(ActorUtil util) {
             while (Work.TryDequeue(out var number)) {
+                if (number == 10) {
+                    printSomethingElse.Work.Enqueue("");
+                }
                 Console.WriteLine($"{number} is divisible by 2.");
             }
             await Task.FromResult(0);
         }
     }
 
-    [Instance]
-    class PeerThree : Actor {
+    class PrintThrees : Actor {
         public MessageQueue<int> Work = new MessageQueue<int>();
+
+        [Parent]
+        private CountAndPrint parent;
 
         protected override async Task OnRun(ActorUtil util) {
             while (Work.TryDequeue(out var number)) {
+                if (number == 9) {
+                    parent.ReportNine();
+                }
                 Console.WriteLine($"{number} is divisible by 3.");
+            }
+            await Task.FromResult(0);
+        }
+    }
+
+    class PrintSomethingElse : Actor {
+        public MessageQueue<string> Work = new MessageQueue<string>();
+
+        protected override async Task OnRun(ActorUtil util) {
+            while (Work.TryDequeue(out var msg)) {
+                Console.WriteLine(msg);
             }
             await Task.FromResult(0);
         }
@@ -167,11 +184,11 @@ namespace Example.Actin
             return await Task.FromResult(new Role[] {
                 new Role {
                     Id = 1,
-                    Type = typeof(PeerIncrement) //You would also check the database to see what this type should be.
+                    Type = typeof(IncrementNumber) //You would also check the database to see what this type should be.
                 },
                 new Role {
                     Id = 2,
-                    Type = typeof(PeerDecrement)
+                    Type = typeof(DecrementNumber)
                 }
             });
         }
@@ -188,14 +205,14 @@ namespace Example.Actin
     }
 
     [Instance]
-    class PeerIncrement : TransformNumber {
+    class IncrementNumber : TransformNumber {
         protected override async Task<int> Transform(ActorUtil util, int x) {
             return await Task.FromResult(++x);
         }
     }
 
     [Instance]
-    class PeerDecrement : TransformNumber {
+    class DecrementNumber : TransformNumber {
         protected override async Task<int> Transform(ActorUtil util, int x) {
             return await Task.FromResult(--x);
         }
@@ -207,11 +224,11 @@ namespace Example.Actin
             return await Task.FromResult(new Role[] {
                 new Role {
                     Id = 1,
-                    Type = typeof(PeerIncrement) //You would also check the database to see what this type should be.
+                    Type = typeof(IncrementNumber) //You would also check the database to see what this type should be.
                 },
                 new Role {
                     Id = 2,
-                    Type = typeof(PeerDecrement)
+                    Type = typeof(DecrementNumber)
                 }
             });
         }
@@ -236,7 +253,6 @@ namespace Example.Actin
         }
     }
 
-    [Instance]
     class AnActorWithCustomizedTypes : Actor<Role<long>, long>
     {
         protected override Task OnRun(ActorUtil util)

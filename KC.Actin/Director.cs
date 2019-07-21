@@ -39,7 +39,7 @@ namespace KC.Actin {
         public Director(string logDirectoryPath) {
             this.StandardLog = new ActinStandardLogger(logDirectoryPath);
             this.log = this.StandardLog;
-            this.addActor(this.StandardLog);
+            this.AddActor(this.StandardLog);
         }
 
         /// <summary>
@@ -185,45 +185,39 @@ namespace KC.Actin {
                     assem = new Assembly[] { Assembly.GetEntryAssembly() };
                 }
 
-                var instantiatorsList = new List<ActinInstantiator>();
+                var rootableDependencies = new Dictionary<Type, ActinInstantiator>();
                 foreach (var a in assem) {
                     try {
                         foreach (var t in a.GetTypes()) {
-                            var instantiator = new ActinInstantiator(t);
-                            if (instantiator.Eligible) {
-                                instantiatorsList.Add(instantiator);
+                            if (t.HasAttribute<SingletonAttribute>() || t.HasAttribute<InstanceAttribute>()) { 
+                                rootableDependencies[t] = new ActinInstantiator(t);
                             }
                         }
                     }
                     catch (Exception ex) {
-                        var msg = $"Actin Failed in assembly {a.FullName}. See inner exception for details.";
+                        var msg = $"Actin Failed in assembly {a.FullName}. Inner Exception: {ex.Message}";
                         util.Log.Error(null, msg, ex);
                         await runLogNow();
                         throw new Exception(msg, ex);
                     }
                 }
 
+                //Add these instantiators to the global dictionary:
                 lock (lockInstantiators) {
-                    foreach (var instantiator in instantiatorsList) {
+                    foreach (var instantiator in rootableDependencies.Values) {
                         this.instantiators.Add(instantiator.Type, instantiator);
+                    }
+                    foreach (var instantiator in rootableDependencies.Values) {
+                        instantiator.Build(t => {
+                            if (!this.instantiators.TryGetValue(t, out var dependencyInstantiator)) {
+                                dependencyInstantiator = new ActinInstantiator(t);
+                                this.instantiators[t] = dependencyInstantiator;
+                            }
+                            return dependencyInstantiator;
+                        });
                     }
                 }
 
-                try {
-                    foreach (var singletonInstantiator in instantiatorsList.Where(x => x.IsSingleton)) {
-                        var instance = singletonInstantiator.CreateNew();
-                        if (AddSingletonDependency(instance)) {
-                            singletonInstantiator.ResolveDependencies(instance, this);
-                        }
-                        else {
-                            //this means the singleton already exists, which means it was added manually,
-                            //or it was added through recursive dependency resolution.
-                        }
-                    }
-                }
-                catch (Exception ex) {
-                    throw new ApplicationException($"Actin Failed. See inner exception for details.", ex);
-                }
             }
             catch (Exception ex) when (logFailedStartup(ex)) {
                 //Exception is always unhandled, this is a nicer way to ensure logging before the exception propagates.

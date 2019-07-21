@@ -1,66 +1,227 @@
 ﻿using KC.Ricochet;
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 using System.Reflection;
 using System.Text;
 
 namespace KC.Actin {
     public class ActinInstantiator {
-        public readonly bool IsSingleton;
-        public readonly bool IsInstance;
         public readonly bool IsActor;
-        public readonly bool Eligible;
         public readonly Type Type;
-        public readonly Instantiator Instantiator;
-        public readonly PropertyAndFieldAccessor[] SingletonDependencies;
-        public readonly PropertyAndFieldAccessor[] PeerDependencies;
-        public readonly PropertyAndFieldAccessor[] InstanceDependencies;
+        private bool runBefore;
+        //Null unless a Parent or Sibling attribute was used. To keep it null, use the flexible attributes instead.
+        private Type StaticParentType;
 
-        public Func<object> GetNew;
+        Instantiator RicochetInstantiator;
+        List<AccessorInstantiatorPair> SingletonDependencies = new List<AccessorInstantiatorPair>();
+        List<AccessorInstantiatorPair> InstanceDependencies = new List<AccessorInstantiatorPair>();
+        List<AccessorInstantiatorPair> ParentDependencies = new List<AccessorInstantiatorPair>();
+        List<AccessorInstantiatorPair> SiblingDependencies = new List<AccessorInstantiatorPair>();
 
         public ActinInstantiator(Type t) {
             Type = t;
-            IsSingleton = Attribute.GetCustomAttribute(t, typeof(SingletonAttribute)) != null;
-            IsInstance = Attribute.GetCustomAttribute(t, typeof(InstanceAttribute)) != null;
             IsActor = t.IsSubclassOf(typeof(Actor_SansType));
-            Eligible = (IsActor && (IsSingleton || IsInstance)) || (!IsActor && IsSingleton);
-
-            if (!Eligible) {
-                return;
-            }
 
             try {
-                Instantiator = Ricochet.Util.GetConstructor(t);
+                RicochetInstantiator = Ricochet.Util.GetConstructor(Type);
             }
             catch (ApplicationException ex) {
-                throw new ApplicationException($"{t.Name}'s has no parameterless public constructor.", ex);
+                throw new ApplicationException($"{Type.Name} has no parameterless public constructor.", ex);
             }
-
-            var allClassFields = Ricochet.Util.GetPropsAndFields(t, x => x.IsClass);
-            SingletonDependencies = allClassFields.Where(x => x.Markers.Contains(nameof(SingletonAttribute))).ToArray();
-            PeerDependencies = allClassFields.Where(x => x.Markers.Contains(nameof(PeerAttribute))).ToArray();
-            InstanceDependencies = allClassFields.Where(x => x.Markers.Contains(nameof(InstanceAttribute))).ToArray();
         }
 
-        public object CreateNew() {
-            return Instantiator.New();
-        }
-
-        public void ResolveDependencies(object instance, Director director, bool fakeDependencies = false) {
-            //TODO: If fakeDependencies is true, then proxy classes should be created for all dependencies.
-            //In theory we could somehow decide which dependencies to fake, but I'll deal with that rabbit hole later.
-            foreach (var dependency in SingletonDependencies) {
-                var currentValue = dependency.GetVal(instance);
-                if (currentValue == null) {
-                    var dependencyInstantiator = director.
+        internal void Build(Func<Type, ActinInstantiator> getInstantiatorFromType, ImmutableList<ActinInstantiator> lineage = null) {
+            //Check for circular dependencies:
+            if (lineage != null) {
+                if (lineage.Any(x => x.Type == this.Type)) {
+                    var sb = new StringBuilder();
+                    sb.AppendLine("Circular dependency detected: ");
+                    foreach (var inst in lineage) {
+                        sb.Append("|--");
+                        sb.Append(inst.Type.Name);
+                        if (inst.Type == this.Type) {
+                            sb.AppendLine(" <== Declared Here");
+                        }
+                        else {
+                            sb.AppendLine();
+                        }
+                    }
+                    throw new ApplicationException(sb.ToString());
                 }
             }
 
-            if (IsActor) {
-                director.
+            var parentType = lineage.Last().Type;
+            if (StaticParentType != null && StaticParentType != parentType) {
+                //If run from two different types, some of the build type checks won't be run a second time.
+                //To ensure we catch type errors on startup, we check if the cached parent type matches the stored parent type.
+                throw new ApplicationException($"{this.Type.Name} has a parent dependency of type {parentType.Name}, but this conflicts with a previous parent dependency {StaticParentType.Name}. Use the FlexibleParent and FlexibleSibling attributes if {this.Type.Name} only sometimes has a parent/sibling available, or if the type of a parent/sibling may change.");
             }
-            throw new NotImplementedException();
+
+            if (!runBefore) {
+                var allAccessors = Ricochet.Util.GetPropsAndFields(this.Type, x => x.IsClass);
+                foreach (var memberAccessor in allAccessors) {
+                    AccessorInstantiatorPair getPair() =>
+                        new AccessorInstantiatorPair {
+                            Accessor = memberAccessor,
+                            Instantiator = getInstantiatorFromType(memberAccessor.Type),
+                        };
+
+                    if (memberAccessor.Markers.Contains(nameof(SingletonAttribute))) {
+                        this.SingletonDependencies.Add(getPair());
+                    }
+                    else if (memberAccessor.Markers.Contains(nameof(InstanceAttribute))) {
+                        this.InstanceDependencies.Add(getPair());
+                    }
+                    else if (memberAccessor.Markers.Contains(nameof(ParentAttribute))) {
+                        var pair = getPair();
+                        if (lineage == null) {
+                            throw new ApplicationException($"{this.Type.Name} has a parent attribute, but is being used as a root dependency. Use the FlexibleParent attribute if {this.Type.Name} only sometimes has a parent available, or if the type of the parent may change.");
+                        }
+                        else if (parentType != pair.Instantiator.Type) {
+                            throw new ApplicationException($"{this.Type.Name}.{pair.Accessor.Name} has a parent dependency of type {pair.Accessor.Type.Name}. Its actual parent is {parentType.Name}. Use the FlexibleParent attribute if {this.Type.Name} only sometimes has a parent available, or if the type of the parent may change.");
+                        }
+                        StaticParentType = parentType;
+                        if (this.ParentDependencies.Any()) {
+                            throw new ApplicationException($"{this.Type.Name} has more than one parent dependency. The first is {pair.Accessor.Name}. Use the FlexibleParent attribute if {this.Type.Name} only sometimes has a parent available, or if the type of the parent may change.");
+                        }
+                        this.ParentDependencies.Add(getPair());
+                    }
+                    else if (memberAccessor.Markers.Contains(nameof(FlexibleParentAttribute))) {
+                        this.InstanceDependencies.Add(getPair());
+                    }
+                    else if (memberAccessor.Markers.Contains(nameof(SiblingAttribute))) {
+                        var pair = getPair();
+                        if (lineage == null) {
+                            throw new ApplicationException($"{this.Type.Name} has a sibling attribute, but is being used as a root dependency. Use the FlexibleSibling attribute if {this.Type.Name} only sometimes has a parent available, or if the type of the parent may change.");
+                        }
+                        else {
+                            StaticParentType = parentType;
+                            var siblingDepPair = lineage.Last().InstanceDependencies.FirstOrDefault(x => x.Instantiator.Type == pair.Instantiator.Type);
+                            if (siblingDepPair == null) {
+                                throw new ApplicationException($"{this.Type.Name}.{pair.Accessor.Name} has a sibling dependency of type {pair.Accessor.Type.Name}. Its parent is {lineage.Last().Type.Name} does not have an Instance dependency which matches this. Use the FlexibleSibling attribute if {this.Type.Name} only sometimes has a parent available, or if the type of the parent may change.");
+                            }
+                            else {
+                                pair.SiblingDependencyPair = siblingDepPair;
+                            }
+                        }
+                        this.SiblingDependencies.Add(getPair());
+                    }
+                    else if (memberAccessor.Markers.Contains(nameof(FlexibleSiblingAttribute))) {
+                        this.InstanceDependencies.Add(getPair());
+                    }
+                }
+                runBefore = true;
+            }
+
+            //We don't need to build sibling/parent dependencies, as they are just references to instance dependencies.
+            //Singleton dependencies are all sent to this function without recursion,
+            //and are also references, so we don't need to recursively build those dependencies here either.
+            var newLineage = lineage.Add(this);
+            foreach (var dep in InstanceDependencies) {
+                dep.Instantiator.Build(getInstantiatorFromType, newLineage);
+            }
         }
+
+        private object CreateNew() {
+            return RicochetInstantiator.New();
+        }
+
+        private void ResolveDependencies(object instance, DependencyType dependencyType, object parent, ActinInstantiator parentInstantiator) {
+            Func<AccessorInstantiatorPair, bool> notSet = (x) => x.Accessor.GetVal(instance) == null;
+            //Set and Resolve Singletons:
+            foreach (var dep in SingletonDependencies.Where(notSet)) {
+                dep.Accessor.SetVal(instance, dep.Instantiator.GetSingleton());
+            }
+            //Set Child Instances:
+            var unresolvedInstanceDependencies = new List<AccessorInstantiatorPairWithInstance>();
+            foreach (var dep in InstanceDependencies.Where(notSet)) {
+                var childInstance = dep.Instantiator.CreateNew();
+                unresolvedInstanceDependencies.Add(new AccessorInstantiatorPairWithInstance {
+                    Pair = dep,
+                    Instance = childInstance,
+                });
+                dep.Accessor.SetVal(instance, childInstance);
+            }
+            //Resolve Child Instances:
+            foreach (var dep in unresolvedInstanceDependencies) {
+                dep.Pair.Instantiator.ResolveDependencies(dep.Instance, DependencyType.Instance, instance, this);
+            }
+
+            if (dependencyType == DependencyType.Instance && parent != null) {
+                //Means we can have parents and siblings:
+                foreach (var dep in ParentDependencies.Where(notSet)) {
+                    try {
+                        dep.Accessor.SetVal(instance, parent);
+                    }
+                    catch when (dep.Accessor.Markers.Contains(nameof(FlexibleParentAttribute))) {
+                        //Swallow the exception, as FlexibleParents may be different types.
+                    }
+                    catch (Exception ex) {
+                        throw new ApplicationException($"Actin failed to set {this.Type.Name}.{dep.Accessor.Name} with parent type {parentInstantiator?.Type.Name} and parent instance {parent}.", ex);
+                    }
+                }
+
+                foreach (var dep in SiblingDependencies.Where(notSet)) {
+                    if (dep.SiblingDependencyPair != null) {
+                        //Normal Sibling:
+                        try {
+                            var siblingInstance = dep.SiblingDependencyPair.Accessor.GetVal(parent);
+                            dep.Accessor.SetVal(instance, siblingInstance);
+                        }
+                        catch (Exception ex) {
+                            throw new ApplicationException($"Actin failed to set sibling dependency {this.Type.Name}.{dep.Accessor.Name} when using parent type {parentInstantiator?.Type.Name} and parent instance {parent}.", ex);
+                        }
+                    }
+                    else {
+                        //Flexible Sibling:
+                        foreach (var parentInstanceDep in parentInstantiator.InstanceDependencies) {
+                            if (parentInstanceDep.Instantiator.Type.IsAssignableFrom(dep.Instantiator.Type)) {
+                                var siblingInstance = parentInstanceDep.Accessor.GetVal(parent);
+                                if (siblingInstance != null) {
+                                    try {
+                                        dep.Accessor.SetVal(instance, siblingInstance);
+                                        break;
+                                    }
+                                    catch {
+                                        //Swallow 
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        private object lockSingleton;
+        private object singleton;
+        public object GetSingleton() {
+            lock (lockSingleton) {
+                if (singleton == null) {
+                    singleton = CreateNew();
+                    ResolveDependencies(singleton, DependencyType.Singleton, null, null);
+                }
+                return singleton;
+            }
+        }
+
+        class AccessorInstantiatorPair {
+            public ActinInstantiator Instantiator;
+            public PropertyAndFieldAccessor Accessor;
+            //Used for get a sibling member from a parent:
+            public AccessorInstantiatorPair SiblingDependencyPair;
+        }
+
+        class AccessorInstantiatorPairWithInstance {
+            public AccessorInstantiatorPair Pair;
+            public object Instance;
+        }
+    }
+
+    public enum DependencyType {
+        Singleton,
+        Instance,
     }
 }
