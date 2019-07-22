@@ -20,6 +20,12 @@ namespace KC.Actin {
             }
         }
 
+        public bool Any() {
+            lock (lockList) {
+                return list.Count > 0;
+            }
+        }
+
         public void Enqueue(T message) {
             lock (lockList) {
                 list.Add(message);

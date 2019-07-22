@@ -19,9 +19,6 @@ namespace KC.Actin {
         private object lockDisposeHandles = new object();
         private List<ActorDisposeHandle> disposeHandles = new List<ActorDisposeHandle>();
 
-        private object lockSingletonDependencies = new object();
-        private Dictionary<Type, InstanceWithInstantiator> singletonDependencies = new Dictionary<Type, InstanceWithInstantiator>();
-
         private object lockInstantiators = new object();
         private Dictionary<Type, ActinInstantiator> instantiators = new Dictionary<Type, ActinInstantiator>();
 
@@ -37,17 +34,20 @@ namespace KC.Actin {
         /// </summary>
         /// <param name="logDirectoryPath"></param>
         public Director(string logDirectoryPath) {
+            this.AddSingletonDependency(this);
             this.StandardLog = new ActinStandardLogger(logDirectoryPath);
             this.log = this.StandardLog;
-            this.AddActor(this.StandardLog);
+            this.AddSingletonDependency(this.log, typeof(IActinLogger));
         }
 
         /// <summary>
         /// Use this to create a custom logger.
         /// </summary>
         /// <param name="log"></param>
-        public Director(IActinLogger log) {
+        public Director(IActinLogger log = null) {
+            this.AddSingletonDependency(this);
             this.log = log ?? this.log;
+            this.AddSingletonDependency(this.log, typeof(IActinLogger));
         }
 
         public bool Running {
@@ -72,20 +72,42 @@ namespace KC.Actin {
             }
         }
 
-        public bool AddSingletonDependency(object d, ActinInstantiator instantiator = null) {
+        public void AddSingletonDependency(object d, params Type[] typeAliases) {
             if (d == null) {
-                throw new ArgumentNullException(nameof(AddSingletonDependency));
+                throw new ArgumentNullException(nameof(d));
             }
-            lock (lockSingletonDependencies) {
-                var t = d.GetType();
-                if (singletonDependencies.ContainsKey(t)) {
-                    return false;
+            var concreteType = d.GetType();
+            lock (lockInstantiators) {
+                if (instantiators.ContainsKey(concreteType)) {
+                    throw new ApplicationException($"Singleton of type {concreteType.Name} could not be added as a Singleton dependency, as a dependency with this type already exists.");
                 }
-                else {
-                    singletonDependencies[t] = new InstanceWithInstantiator { Instance = d, Instantiator = instantiator };
+                instantiators.Add(concreteType, new ActinInstantiator(concreteType, d));
+            }
+            AddSingletonAlias(concreteType, typeAliases);
+        }
+
+        public void AddSingletonAlias(Type existingSingletonType, params Type[] typeAliases) {
+            AddSingletonAlias(existingSingletonType, true, typeAliases);
+        }
+
+        public void AddSingletonAlias(Type existingSingletonType, bool throwIfAliasConflictDetected, params Type[] typeAliases) {
+            lock (lockInstantiators) {
+                if (typeAliases == null || typeAliases.Length == 0) {
+                    return;
+                }
+                if (!this.instantiators.TryGetValue(existingSingletonType, out var existingInstantiator)) {
+                    throw new ApplicationException($"Singleton instance of type {existingSingletonType.Name} must be added with {nameof(AddSingletonDependency)}() before it may be given additional aliases.");
+                }
+
+                foreach (var aliasT in typeAliases) {
+                    if (throwIfAliasConflictDetected && instantiators.TryGetValue(aliasT, out var conflicting)) {
+                        throw new ApplicationException($"Singleton instance of type {existingSingletonType.Name} could not be given alias {aliasT.Name} as {conflicting.Type.Name} has already been given that Alias.");
+                    }
+                    else {
+                        instantiators[aliasT] = existingInstantiator;
+                    }
                 }
             }
-            return true;
         }
 
         private ActorUtil updateUtil(ActorUtil util) {
@@ -149,7 +171,6 @@ namespace KC.Actin {
             }
 
             try {
-                this.AddSingletonDependency(this);
                 //Do manual start up:
                 log.Error("StartUp", "DirectorLoopStarting", "Startup");
                 if (!startUp_loopUntilSucceeds) {
@@ -185,12 +206,17 @@ namespace KC.Actin {
                     assem = new Assembly[] { Assembly.GetEntryAssembly() };
                 }
 
-                var rootableDependencies = new Dictionary<Type, ActinInstantiator>();
                 foreach (var a in assem) {
                     try {
                         foreach (var t in a.GetTypes()) {
-                            if (t.HasAttribute<SingletonAttribute>() || t.HasAttribute<InstanceAttribute>()) { 
-                                rootableDependencies[t] = new ActinInstantiator(t);
+                            if (t.HasAttribute<SingletonAttribute>() || t.HasAttribute<InstanceAttribute>()) {
+                                lock (lockInstantiators) {
+                                    if (!instantiators.ContainsKey(t)) {
+                                        //If it's already contained, then it was manually added as a Singleton dependency.
+                                        //We can't add it again, as when manually added, a singleton instance was provided.
+                                        instantiators[t] = new ActinInstantiator(t);
+                                    }
+                                }
                             }
                         }
                     }
@@ -202,12 +228,10 @@ namespace KC.Actin {
                     }
                 }
 
-                //Add these instantiators to the global dictionary:
                 lock (lockInstantiators) {
-                    foreach (var instantiator in rootableDependencies.Values) {
-                        this.instantiators.Add(instantiator.Type, instantiator);
-                    }
-                    foreach (var instantiator in rootableDependencies.Values) {
+                    //At this point, we should only have manually added singletons, and attribute marked Singleton or Instance classes.
+                    var rootableInstantiators = instantiators.Values.ToList();
+                    foreach (var instantiator in rootableInstantiators) {
                         instantiator.Build(t => {
                             if (!this.instantiators.TryGetValue(t, out var dependencyInstantiator)) {
                                 dependencyInstantiator = new ActinInstantiator(t);
@@ -215,6 +239,9 @@ namespace KC.Actin {
                             }
                             return dependencyInstantiator;
                         });
+                    }
+                    foreach (var singletonInstantiator in rootableInstantiators.Where(x => x.IsRootSingleton)) {
+                        singletonInstantiator.GetSingletonInstance(this);
                     }
                 }
 
@@ -247,7 +274,6 @@ namespace KC.Actin {
             bool readkeyFailed = false;
             while (Running) {
                 try {
-
                     try {
                         if (!readkeyFailed && Environment.UserInteractive) {
                             if (Console.KeyAvailable) {
@@ -273,7 +299,6 @@ namespace KC.Actin {
                     catch (Exception ex) {
                         safeLog("Process Pool Copy", ex);
                     }
-
 
                     try {
                         var shouldRemove = poolCopy.Where(x => x.ShouldBeRemovedFromPool).ToList();
@@ -369,6 +394,42 @@ namespace KC.Actin {
                     safeLog("main while", ex);
                 }
             }
+        }
+
+        public bool TryGetSingleton(Type type, out object singleton) {
+            lock (this.lockInstantiators) {
+                if (instantiators.TryGetValue(type, out var instantiator)) {
+                    if (instantiator == null) {
+                        singleton = null;
+                        return false;
+                    }
+                    if (!instantiator.HasSingletonInstance) {
+                        singleton = null;
+                        return false;
+                    }
+                    singleton = instantiator.GetSingletonInstance(this);
+                    return true;
+                }
+                singleton = null;
+                return false;
+            }
+        }
+
+        public bool TryGetSingleton<T>(out T singleton) {
+            var success = this.TryGetSingleton(typeof(T), out var instance);
+            singleton = success ? (T)instance : default(T);
+            return success;
+        }
+
+        public object GetSingleton(Type t) {
+            if (!this.TryGetSingleton(t, out var singleton)) {
+                throw new ApplicationException($"Singleton of type {t.Name} did not exist.");
+            }
+            return singleton;
+        }
+
+        public T GetSingleton<T>() {
+            return (T)GetSingleton(typeof(T));
         }
     }
 }

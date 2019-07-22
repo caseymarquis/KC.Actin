@@ -8,11 +8,12 @@ using System.Text;
 
 namespace KC.Actin {
     public class ActinInstantiator {
-        public readonly bool IsActor;
+        public readonly bool IsRootSingleton;
         public readonly Type Type;
         private bool runBefore;
         //Null unless a Parent or Sibling attribute was used. To keep it null, use the flexible attributes instead.
         private Type StaticParentType;
+        private object providedSingletonInstance;
 
         Instantiator RicochetInstantiator;
         List<AccessorInstantiatorPair> SingletonDependencies = new List<AccessorInstantiatorPair>();
@@ -20,15 +21,18 @@ namespace KC.Actin {
         List<AccessorInstantiatorPair> ParentDependencies = new List<AccessorInstantiatorPair>();
         List<AccessorInstantiatorPair> SiblingDependencies = new List<AccessorInstantiatorPair>();
 
-        public ActinInstantiator(Type t) {
+        public ActinInstantiator(Type t, object _providedSingletonInstance = null) {
+            providedSingletonInstance = _providedSingletonInstance;
             Type = t;
-            IsActor = t.IsSubclassOf(typeof(Actor_SansType));
+            IsRootSingleton = providedSingletonInstance != null || t.HasAttribute<SingletonAttribute>();
 
-            try {
-                RicochetInstantiator = Ricochet.Util.GetConstructor(Type);
-            }
-            catch (ApplicationException ex) {
-                throw new ApplicationException($"{Type.Name} has no parameterless public constructor.", ex);
+            if (_providedSingletonInstance == null) {
+                try {
+                    RicochetInstantiator = Ricochet.Util.GetConstructor(Type);
+                }
+                catch (ApplicationException ex) {
+                    throw new ApplicationException($"{Type.Name} has no parameterless public constructor.", ex);
+                }
             }
         }
 
@@ -52,7 +56,7 @@ namespace KC.Actin {
                 }
             }
 
-            var parentType = lineage.Last().Type;
+            var parentType = lineage?.Last().Type;
             if (StaticParentType != null && StaticParentType != parentType) {
                 //If run from two different types, some of the build type checks won't be run a second time.
                 //To ensure we catch type errors on startup, we check if the cached parent type matches the stored parent type.
@@ -118,7 +122,7 @@ namespace KC.Actin {
             //We don't need to build sibling/parent dependencies, as they are just references to instance dependencies.
             //Singleton dependencies are all sent to this function without recursion,
             //and are also references, so we don't need to recursively build those dependencies here either.
-            var newLineage = lineage.Add(this);
+            var newLineage = lineage?.Add(this) ?? ImmutableList.Create(this);
             foreach (var dep in InstanceDependencies) {
                 dep.Instantiator.Build(getInstantiatorFromType, newLineage);
             }
@@ -128,11 +132,11 @@ namespace KC.Actin {
             return RicochetInstantiator.New();
         }
 
-        private void ResolveDependencies(object instance, DependencyType dependencyType, object parent, ActinInstantiator parentInstantiator) {
+        private void ResolveDependencies(object instance, DependencyType dependencyType, object parent, ActinInstantiator parentInstantiator, Director director) {
             Func<AccessorInstantiatorPair, bool> notSet = (x) => x.Accessor.GetVal(instance) == null;
             //Set and Resolve Singletons:
             foreach (var dep in SingletonDependencies.Where(notSet)) {
-                dep.Accessor.SetVal(instance, dep.Instantiator.GetSingleton());
+                dep.Accessor.SetVal(instance, dep.Instantiator.GetSingletonInstance(director));
             }
             //Set Child Instances:
             var unresolvedInstanceDependencies = new List<AccessorInstantiatorPairWithInstance>();
@@ -146,7 +150,7 @@ namespace KC.Actin {
             }
             //Resolve Child Instances:
             foreach (var dep in unresolvedInstanceDependencies) {
-                dep.Pair.Instantiator.ResolveDependencies(dep.Instance, DependencyType.Instance, instance, this);
+                dep.Pair.Instantiator.ResolveDependencies(dep.Instance, DependencyType.Instance, instance, this, director);
             }
 
             if (dependencyType == DependencyType.Instance && parent != null) {
@@ -192,16 +196,28 @@ namespace KC.Actin {
                         }
                     }
                 }
+
+                //Add all child actors to the pool, as all of their dependencies have now been resolved.
+                foreach (var dep in unresolvedInstanceDependencies.Where(x => x.Instance is Actor_SansType)) {
+                    director?.AddActor((Actor_SansType)dep.Instance);
+                }
             }
         }
 
-        private object lockSingleton;
+        private object lockSingleton = new object();
         private object singleton;
-        public object GetSingleton() {
+
+        public bool HasSingletonInstance => singleton != null;
+
+        internal object GetSingletonInstance(Director director) {
             lock (lockSingleton) {
                 if (singleton == null) {
-                    singleton = CreateNew();
-                    ResolveDependencies(singleton, DependencyType.Singleton, null, null);
+                    singleton = providedSingletonInstance ?? CreateNew();
+                    ResolveDependencies(singleton, DependencyType.Singleton, null, null, director);
+                    //The director will add the instance to the process pool for us, if the instance is an Actor_SansType:
+                    if (singleton is Actor_SansType) {
+                        director?.AddActor((Actor_SansType)singleton);
+                    }
                 }
                 return singleton;
             }
