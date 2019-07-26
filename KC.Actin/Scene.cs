@@ -87,24 +87,55 @@ namespace KC.Actin {
             lock (lockMyActors) {
                 copyOfMyActors = new Dictionary<TActorRoleId, TActor>(myActors);
             }
+
             var activeRoles = await this.CastActors(util, copyOfMyActors);
-            var uniqueActiveRoles = new Dictionary<TActorRoleId, TActorRole>(activeRoles.Count());
+
+            var uniqueActiveRoles = new Dictionary<TActorRoleId, TActorRole>();
             foreach (var role in activeRoles) {
-                if (role.Id == null) {
+                if (role == null || role.Id == null) {
                     continue;
                 }
                 uniqueActiveRoles[role.Id] = role;
             }
 
-            foreach (var role in activeRoles) {
-                if (copyOfMyActors.TryGetValue(role.Id, out var existing)) {
-
+            //Dispose actors which are not found in active roles,
+            //or which have specified types which do not match.
+            var toDispose = new List<TActor>();
+            foreach (var pair in copyOfMyActors) {
+                if (uniqueActiveRoles.TryGetValue(pair.Key, out var matchingRole)) {
+                    if (matchingRole.Type != pair.Value.SceneRoleType) {
+                        toDispose.Add(pair.Value);
+                    }
+                }
+                else {
+                    toDispose.Add(pair.Value);
                 }
             }
-            removeWhere(x => x.Disposing);
-            
-            void removeWhere(Func<TActor, bool> predicate){
+            foreach (var actor in toDispose) {
+                actor.Dispose();
+                copyOfMyActors.Remove(actor.Id);
+            }
 
+            //Create actors which are missing:
+            foreach (var role in uniqueActiveRoles) {
+                if (!copyOfMyActors.ContainsKey(role.Key)) {
+                    var typeToCreate = role.Value.Type ?? typeof(TActor);
+                    TActor newActor = null;
+                    try {
+                        newActor = (TActor)director.CreateInstance(typeToCreate, this);
+                        newActor.SetId(role.Key);
+                    }
+                    catch (Exception ex) {
+                        util.Log.Error(this.IdString, $"{this.ActorName}.CreateInstance", ex);
+                        continue;
+                    }
+                    copyOfMyActors[newActor.Id] = newActor;
+                    newActor.SceneRoleType = role.Value.Type;
+                }
+            }
+
+            lock (lockMyActors) {
+                myActors = copyOfMyActors;
             }
         }
     }

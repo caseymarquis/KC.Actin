@@ -39,7 +39,7 @@ namespace Test.Actin
         }
     }
 
-    public class UnitTest1
+    public class SingletonTests
     {
         [Fact]
         public async Task RunManualAndDIProcs()

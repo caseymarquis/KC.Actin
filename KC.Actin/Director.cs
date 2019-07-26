@@ -431,5 +431,17 @@ namespace KC.Actin {
         public T GetSingleton<T>() {
             return (T)GetSingleton(typeof(T));
         }
+
+        public Actor_SansType CreateInstance(Type typeToCreate, Actor_SansType parent) {
+            ActinInstantiator inst;
+            bool success;
+            lock (lockInstantiators) {
+                success = this.instantiators.TryGetValue(typeToCreate, out inst);
+            }
+            if (!success) {
+                throw new ApplicationException($"Actin could not create an instance of {typeToCreate?.Name ?? "null"} for parent {parent?.ActorName ?? "null"}. Ensure that this type was marked with the 'Instance' attribute, or that a type alias has been specified.");
+            }
+            return (Actor_SansType)inst.GetInstance(this, parent);
+        }
     }
 }

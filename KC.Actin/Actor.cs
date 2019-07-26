@@ -18,11 +18,23 @@ namespace KC.Actin {
         public TRoleId Id { get; private set; }
         public override string IdString => $"{Id}";
 
+        internal override void SetId(object id) {
+            this.Id = (TRoleId)id;
+        }
+
         public Actor() : base() { }
     }
 
     public abstract class Actor_SansType : IDisposable {
         public abstract string IdString { get; }
+        internal abstract void SetId(object id);
+
+        /// <summary>
+        /// Used by scenes. The type specified in the role used to create this actor.
+        /// This can be checked against the role in the future, and if the two
+        /// no longer match, then the actor should be disposed and recreated.
+        /// </summary>
+        public Type SceneRoleType { get; internal set; }
 
         private string m_ActorName;
         public Actor_SansType() {
@@ -198,6 +210,7 @@ namespace KC.Actin {
                 ensureRunIsSynchronous.Release();
             }
         }
+
 
         private bool disposing = false;
         private ActorDisposeHandle disposeHandle;

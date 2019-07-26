@@ -228,7 +228,7 @@ namespace Example.Actin
                 },
                 new Role {
                     Id = 2,
-                    Type = typeof(DecrementNumber)
+                    Type = typeof(CountAndPrint)
                 }
             });
         }

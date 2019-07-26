@@ -163,7 +163,7 @@ namespace KC.Actin {
                         //Swallow the exception, as FlexibleParents may be different types.
                     }
                     catch (Exception ex) {
-                        throw new ApplicationException($"Actin failed to set {this.Type.Name}.{dep.Accessor.Name} with parent type {parentInstantiator?.Type.Name} and parent instance {parent}.", ex);
+                        throw new ApplicationException($"Actin failed to set {this.Type.Name}.{dep.Accessor.Name} with parent type {parentInstantiator?.Type.Name ?? "'Not Specified'"} and parent instance {parent ?? "null"}.", ex);
                     }
                 }
 
@@ -175,7 +175,7 @@ namespace KC.Actin {
                             dep.Accessor.SetVal(instance, siblingInstance);
                         }
                         catch (Exception ex) {
-                            throw new ApplicationException($"Actin failed to set sibling dependency {this.Type.Name}.{dep.Accessor.Name} when using parent type {parentInstantiator?.Type.Name} and parent instance {parent}.", ex);
+                            throw new ApplicationException($"Actin failed to set sibling dependency {this.Type.Name}.{dep.Accessor.Name} when using parent type {parentInstantiator?.Type.Name ?? "'Not Specified'"} and parent instance {parent ?? "null"}.", ex);
                         }
                     }
                     else {
@@ -214,13 +214,21 @@ namespace KC.Actin {
                 if (singleton == null) {
                     singleton = providedSingletonInstance ?? CreateNew();
                     ResolveDependencies(singleton, DependencyType.Singleton, null, null, director);
-                    //The director will add the instance to the process pool for us, if the instance is an Actor_SansType:
                     if (singleton is Actor_SansType) {
                         director?.AddActor((Actor_SansType)singleton);
                     }
                 }
                 return singleton;
             }
+        }
+
+        internal object GetInstance(Director director, object parent, ActinInstantiator parentInstantiator = null) {
+            var instance = CreateNew();
+            ResolveDependencies(instance, DependencyType.Instance, parent, parentInstantiator, director);
+            if (instance is Actor_SansType) {
+                director?.AddActor((Actor_SansType)instance);
+            }
+            return instance;
         }
 
         class AccessorInstantiatorPair {
