@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace KC.Actin {
@@ -15,6 +16,18 @@ namespace KC.Actin {
 
         private object lockProcessPool = new object();
         private List<Actor_SansType> processPool = new List<Actor_SansType>();
+
+        private static ReaderWriterLockSlim lockDirectors = new ReaderWriterLockSlim();
+        private static Dictionary<string, Director> directors = new Dictionary<string, Director>();
+        public static bool TryGetDirector(string name, out Director director) {
+            lockDirectors.EnterReadLock();
+            try {
+                return directors.TryGetValue(name, out director);
+            }
+            finally {
+                lockDirectors.ExitReadLock();
+            }
+        }
 
         private object lockDisposeHandles = new object();
         private List<ActorDisposeHandle> disposeHandles = new List<ActorDisposeHandle>();
@@ -33,21 +46,30 @@ namespace KC.Actin {
         /// to daily files at the specified directory.
         /// </summary>
         /// <param name="logDirectoryPath"></param>
-        public Director(string logDirectoryPath) {
-            this.AddSingletonDependency(this);
+        public Director(string logDirectoryPath, string name = null) {
             this.StandardLog = new ActinStandardLogger(logDirectoryPath);
-            this.log = this.StandardLog;
-            this.AddSingletonDependency(this.log, typeof(IActinLogger));
+            setup(this.StandardLog, name);
         }
 
         /// <summary>
         /// Use this to create a custom logger.
         /// </summary>
         /// <param name="log"></param>
-        public Director(IActinLogger log = null) {
+        public Director(IActinLogger log = null, string name = null) {
+            setup(log, name);
+        }
+
+        private void setup(IActinLogger log, string name) {
             this.AddSingletonDependency(this);
             this.log = log ?? this.log;
             this.AddSingletonDependency(this.log, typeof(IActinLogger));
+            lockDirectors.EnterWriteLock();
+            try {
+                directors[name ?? ""] = this;
+            }
+            finally {
+                lockDirectors.ExitWriteLock();
+            }
         }
 
         public bool Running {
@@ -138,6 +160,17 @@ namespace KC.Actin {
 #pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
                 handle.DisposeProcess(util);
 #pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+            }
+
+            lockDirectors.EnterWriteLock();
+            try {
+                var match = directors.FirstOrDefault(x => x.Value == this);
+                if (match.Key != null) {
+                    directors.Remove(match.Key);
+                }
+            }
+            finally {
+                lockDirectors.ExitWriteLock();
             }
         }
 
@@ -446,5 +479,42 @@ namespace KC.Actin {
             }
             return (Actor_SansType)inst.GetInstance(this, parent);
         }
+
+        /// <summary>
+        /// This should only be used with a type which cannot be instantiated through Actin,
+        /// but which Actin's dependency injection is still used on. For example, this is used on MVC
+        /// controllers marked with [Instance] to resolve dependencies marked with [Instance] or [Singleton].
+        /// </summary>
+        public void WithExternal_ResolveDependencies(object obj) {
+            if (obj == null) {
+                return;
+            }
+            var type = obj.GetType();
+            ActinInstantiator inst;
+            lock (lockInstantiators) {
+                if (!this.instantiators.TryGetValue(type, out inst)) {
+                    return;
+                }
+            }
+            inst.ResolveDependencies(obj, DependencyType.Instance, null, null, this);
+        }
+
+        /// <summary>
+        /// Used to dispose child dependencies created on an object using WithExternal_ResolveDependencies().
+        /// </summary>
+        public void WithExternal_DisposeChildren(object obj) {
+            if (obj == null) {
+                return;
+            }
+            var type = obj.GetType();
+            ActinInstantiator inst;
+            lock (lockInstantiators) {
+                if (!this.instantiators.TryGetValue(type, out inst)) {
+                    return;
+                }
+            }
+            inst.DisposeChildren(obj);
+        }
+
     }
 }

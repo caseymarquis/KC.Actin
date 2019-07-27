@@ -136,7 +136,7 @@ namespace KC.Actin {
             return RicochetInstantiator.New();
         }
 
-        private void ResolveDependencies(object instance, DependencyType dependencyType, object parent, ActinInstantiator parentInstantiator, Director director) {
+        internal void ResolveDependencies(object instance, DependencyType dependencyType, object parent, ActinInstantiator parentInstantiator, Director director) {
             var asActor = instance as Actor_SansType;
             if (asActor != null) {
                 asActor.Instantiator = this; //Used for automatically disposing child dependencies.
