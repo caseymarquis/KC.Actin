@@ -46,11 +46,9 @@ namespace KC.Actin {
                         sb.Append("|--");
                         sb.Append(inst.Type.Name);
                         if (inst.Type == this.Type) {
-                            sb.AppendLine(" <== Declared Here");
+                            sb.Append(" <== Declared Here");
                         }
-                        else {
-                            sb.AppendLine();
-                        }
+                        sb.AppendLine();
                     }
                     throw new ApplicationException(sb.ToString());
                 }
