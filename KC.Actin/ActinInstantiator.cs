@@ -93,7 +93,7 @@ namespace KC.Actin {
                         this.ParentDependencies.Add(getPair());
                     }
                     else if (memberAccessor.Markers.Contains(nameof(FlexibleParentAttribute))) {
-                        this.InstanceDependencies.Add(getPair());
+                        this.ParentDependencies.Add(getPair());
                     }
                     else if (memberAccessor.Markers.Contains(nameof(SiblingAttribute))) {
                         var pair = getPair();
@@ -113,7 +113,7 @@ namespace KC.Actin {
                         this.SiblingDependencies.Add(getPair());
                     }
                     else if (memberAccessor.Markers.Contains(nameof(FlexibleSiblingAttribute))) {
-                        this.InstanceDependencies.Add(getPair());
+                        this.SiblingDependencies.Add(getPair());
                     }
                 }
                 runBefore = true;
