@@ -110,7 +110,7 @@ namespace KC.Actin {
             }
         }
 
-        private ActorUtil updateUtil(ActorUtil util) {
+        private T updateUtil<T>(T util) where T : ActorUtil {
             util.Log = log;
             util.Now = DateTimeOffset.Now;
             return util;
@@ -141,7 +141,7 @@ namespace KC.Actin {
             }
         }
 
-        public async Task Run(Func<ActorUtil, Task> startUp, bool startUp_loopUntilSucceeds, params Assembly[] assembliesToCheckForDI) {
+        public async Task Run(Func<StartupUtil, Task> startUp, bool startUp_loopUntilSucceeds, params Assembly[] assembliesToCheckForDI) {
             lock (lockRunning) {
                 if (__running__) {
                     return;
@@ -155,14 +155,14 @@ namespace KC.Actin {
                 return false;
             }
 
-            var util = updateUtil(new ActorUtil());
+            var startUtil = updateUtil(new StartupUtil());
             async Task runLogNow() {
                 try {
                     //https://github.com/dotnet/csharplang/issues/35
                     var logActor = log as Actor;
                     if (logActor != null) {
-                        util = updateUtil(util);
-                        await logActor.Run(util);
+                        startUtil = updateUtil(startUtil);
+                        await logActor.Run(startUtil);
                     }
                 }
                 catch {
@@ -174,13 +174,13 @@ namespace KC.Actin {
                 //Do manual start up:
                 log.Error("StartUp", "DirectorLoopStarting", "Startup");
                 if (!startUp_loopUntilSucceeds) {
-                    await startUp(util);
+                    await startUp(startUtil);
                 }
                 else {
                     while (true) {
                         try {
-                            updateUtil(util);
-                            await startUp(util);
+                            updateUtil(startUtil);
+                            await startUp(startUtil);
                             break;
                         }
                         catch (Exception ex) {
@@ -222,7 +222,7 @@ namespace KC.Actin {
                     }
                     catch (Exception ex) {
                         var msg = $"Actin Failed in assembly {a.FullName}. Inner Exception: {ex.Message}";
-                        util.Log.Error(null, msg, ex);
+                        startUtil.Log.Error(null, msg, ex);
                         await runLogNow();
                         throw new Exception(msg, ex);
                     }
@@ -231,6 +231,9 @@ namespace KC.Actin {
                 lock (lockInstantiators) {
                     //At this point, we should only have manually added singletons, and attribute marked Singleton or Instance classes.
                     var rootableInstantiators = instantiators.Values.ToList();
+                    if (startUtil.rootActorFilter != null) {
+                        rootableInstantiators = rootableInstantiators.Where(startUtil.rootActorFilter).ToList();
+                    }
                     foreach (var instantiator in rootableInstantiators) {
                         instantiator.Build(t => {
                             if (!this.instantiators.TryGetValue(t, out var dependencyInstantiator)) {
