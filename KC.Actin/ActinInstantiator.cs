@@ -90,7 +90,7 @@ namespace KC.Actin {
                         if (this.ParentDependencies.Any()) {
                             throw new ApplicationException($"{this.Type.Name} has more than one parent dependency. The first is {pair.Accessor.Name}. Use the FlexibleParent attribute if {this.Type.Name} only sometimes has a parent available, or if the type of the parent may change.");
                         }
-                        this.ParentDependencies.Add(getPair());
+                        this.ParentDependencies.Add(pair);
                     }
                     else if (memberAccessor.Markers.Contains(nameof(FlexibleParentAttribute))) {
                         this.ParentDependencies.Add(getPair());
@@ -110,7 +110,7 @@ namespace KC.Actin {
                                 pair.SiblingDependencyPair = siblingDepPair;
                             }
                         }
-                        this.SiblingDependencies.Add(getPair());
+                        this.SiblingDependencies.Add(pair);
                     }
                     else if (memberAccessor.Markers.Contains(nameof(FlexibleSiblingAttribute))) {
                         this.SiblingDependencies.Add(getPair());
