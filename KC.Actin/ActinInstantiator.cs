@@ -40,10 +40,16 @@ namespace KC.Actin {
             //Check for circular dependencies:
             if (lineage != null) {
                 if (lineage.Any(x => x.Type == this.Type)) {
+                    var lineagePlusOne = lineage.Add(this);
                     var sb = new StringBuilder();
                     sb.AppendLine("Circular dependency detected: ");
-                    foreach (var inst in lineage) {
-                        sb.Append("|--");
+                    int depth = 0;
+                    foreach (var inst in lineagePlusOne) {
+                        depth++;
+                        sb.Append("|");
+                        for (int i = 0; i < depth; i++) {
+                            sb.Append("-");
+                        }
                         sb.Append(inst.Type.Name);
                         if (inst.Type == this.Type) {
                             sb.Append(" <== Declared Here");
