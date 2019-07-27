@@ -28,6 +28,7 @@ namespace KC.Actin {
     public abstract class Actor_SansType : IDisposable {
         public abstract string IdString { get; }
         internal abstract void SetId(object id);
+        internal ActinInstantiator Instantiator { get; set; }
 
         /// <summary>
         /// Used by scenes. The type specified in the role used to create this actor.
@@ -233,10 +234,16 @@ namespace KC.Actin {
             await ensureRunIsSynchronous.WaitAsync();
             try {
                 try {
+                    this.Instantiator?.DisposeChildren(this);
+                }
+                catch (Exception ex) {
+                    util.Log.Error(this.ActorName, "OnDispose_Children()", ex);
+                }
+                try {
                     await OnDispose(util);
                 }
                 catch (Exception ex) {
-                    util.Log.Error(this.ActorName, "EventLoop.OnDispose()", ex);
+                    util.Log.Error(this.ActorName, "OnDispose_Self()", ex);
                 }
             }
             finally {

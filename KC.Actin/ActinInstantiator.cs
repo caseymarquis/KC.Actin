@@ -131,6 +131,10 @@ namespace KC.Actin {
         }
 
         private void ResolveDependencies(object instance, DependencyType dependencyType, object parent, ActinInstantiator parentInstantiator, Director director) {
+            var asActor = instance as Actor_SansType;
+            if (asActor != null) {
+                asActor.Instantiator = this; //Used for automatically disposing child dependencies.
+            }
             Func<AccessorInstantiatorPair, bool> notSet = (x) => x.Accessor.GetVal(instance) == null;
             //Set and Resolve Singletons:
             foreach (var dep in SingletonDependencies.Where(notSet)) {
@@ -198,6 +202,35 @@ namespace KC.Actin {
                 //Add all child actors to the pool, as all of their dependencies have now been resolved.
                 foreach (var dep in unresolvedInstanceDependencies.Where(x => x.Instance is Actor_SansType)) {
                     director?.AddActor((Actor_SansType)dep.Instance);
+                }
+            }
+        }
+
+        internal void DisposeChildren(object instance) {
+            foreach (var dep in this.InstanceDependencies) {
+                var childInstance = dep.Accessor.GetVal(instance);
+                if (!object.Equals(null, childInstance)) {
+                    List<Exception> exceptions = null;
+                    try {
+                        var asDisposable = childInstance as IDisposable;
+                        asDisposable.Dispose();
+                        if (childInstance is Actor_SansType) {
+                            //Let it dispose of its own child dependencies.
+                        }
+                        else {
+                            //Dispose of its child dependencies now:
+                            dep.Instantiator?.DisposeChildren(childInstance);
+                        }
+                    }
+                    catch (Exception ex) {
+                        if (exceptions == null) {
+                            exceptions = new List<Exception>();
+                        }
+                        exceptions.Add(ex);
+                    }
+                    if (exceptions != null) {
+                        throw new AggregateException(exceptions);
+                    }
                 }
             }
         }
