@@ -138,5 +138,15 @@ namespace KC.Actin {
                 myActors = copyOfMyActors;
             }
         }
+
+        protected override async Task OnDispose(ActorUtil util) {
+            lock (lockMyActors) {
+                foreach (var actor in myActors) {
+                    actor.Value.Dispose();
+                }
+                myActors.Clear();
+            }
+            await base.OnDispose(util);
+        }
     }
 }
