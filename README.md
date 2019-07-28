@@ -45,7 +45,6 @@ namespace Example.Actin
                 new WidgetConfig { Id = 1, Name = "Widget One", Type = "TYPE1" }, 
                 new WidgetConfig { Id = 2, Name = "Widget Two", Type = "TYPE2" }, 
             };
-            await Task.FromResult(0);
         }
     }
 
@@ -55,7 +54,6 @@ namespace Example.Actin
         CacheTheWidgetConfigurations widgetCache;
 
         protected override async Task<IEnumerable<Role>> CastActors(ActorUtil util, Dictionary<int, Actor> myActors) {
-            await Task.FromResult(0);
             return widgetCache.WidgetInfo.Select(widgetInfo => new Role {
                 Id = widgetInfo.Id,
                 Type = getWidgetType(widgetInfo.Type)
@@ -96,7 +94,6 @@ namespace Example.Actin
 
             var data = CheckOnWidget(myInfo);
             databasePusher.DataToPush.Enqueue(data);
-            await Task.FromResult(0);
         }
     }
 
@@ -129,7 +126,6 @@ namespace Example.Actin
             if (DataToPush.TryDequeue(out var widgetData)) {
                 Console.WriteLine($"SENT TO DATABASE: '{widgetData}'");
             }
-            await Task.FromResult(0);
         }
     }
 
