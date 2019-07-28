@@ -1,146 +1,152 @@
-# NanoProcesses
+# Actin
 
-This is a library for creating a .NET application with a 'nanoprocess' architecture.
-This architecture promotes separation of concerns and clear dependency specification
-within a monolithic application, and allows specific pieces of the application to be
-identified and easily converted to separate services when it is determined that the
-performance benefits are worth the increased complexity of creating a 'microservice'.
-
-This architecture aims to ease a few problems:
-* Monoliths are easy to debug, but they fail to scale well horizontally.
-* Microservices can be painful to work with, and are often used poorly or prematurely (ie distributed monoliths or nanoservices), but scale extremely well.
-* Microservices are promoted as forcing a separation of concerns, but the price of doing so is often not proportional to the benefit.
-* Moving a monolith over to microservices can fail spectacularly in a variety of ways.
+Actin is a single process 'Actor Framework' for the dot net platform. In the same way that ASP.NET MVC magically makes HTTP endpoints with minimal boilerplate, Actin tries to magically make complex (but well organized) systems with minimal boilerplate.
 
 ### Installing
 
-* .Net Framework: Install-Package KC.NanoProcesses
-* .Net Core: dotnet add package KC.NanoProcesses
+* .Net Framework: Install-Package KC.Actin
+* .Net Core: dotnet add package KC.Actin
 
-## Getting Started
+## Why would I use Actin?
 
-The below code creates two processes. One generates random numbers, and the other writes them to disk.
-In a real world application, one process might be pulling data from an external system, and the
-other could be cleaning it and writing it to a database.
+1. You need to repeatedly perform some task. (ie Check on some widget with some widget protocol, every 15 seconds)
+2. You need to customize a series of tasks based on some sort of configuration data. (ie Check on every widget referenced in the database with its respective protocol, every 15 seconds)
+3. You need these tasks to interact with each other in complex ways (ie Queue the widget data to be stored in the database, periodically check if the database is up, then batch write the data to the database).
+4. You want to write as little code as possible.
 
-While processes can be created manually, they are typically created automatically with reflection.
-This is similar to how controllers are automagically created in ASP.NET.
+Below is an asynchronous multi-threaded application that effectively coordinates all that in around 100 lines of code (minus talking to an actual database or actual widgets). Instantiation is automated. Dependencies are magically provided. Error logging is automated. Disposal is automated. All you need to do is write the app, and remember that each Actor is running independently so you need locks on shared resources (The MesssageQueue and Atom types are used for this below).
 
 ```C#
-using KC.NanoProcesses;
+using KC.Actin;
 using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Text;
+using System.Linq;
 using System.Threading.Tasks;
 
-namespace Example.NanoProcesses
+namespace Example.Actin
 {
     class Program
     {
         static void Main(string[] args)
         {
-            var manager = new NanoProcessManager(new Logger());
-            manager.PrintRunningProcessesToConsoleIfDebug = true;
-
-            //This will run until the user hits Q or Escape. (If Environment is interactive.)
-            //All Processes marked with the NanoDI attribute will be automatically created
-            //and passed their dependencies.
-            manager.Run(startUp: async (util) => {
-                //Run special startup code if needed, and manually add processes or dependencies:
-                Console.WriteLine("This runs before processes are automatically instantiated.");
-                await Task.FromResult(0);
-            }).Wait();
+            new Director("./log").Run().Wait();
         }
     }
 
-    /// <summary>
-    /// This will generate a new number once per second.
-    /// </summary>
-    [NanoDI]
-    class GetWork : NanoProcess {
+    [Singleton]
+    class CacheTheWidgetConfigurations : Actor {
+        protected override TimeSpan RunDelay => new TimeSpan(0, 0, 5);
 
-        private SaveWork saveWork;
-        public GetWork(SaveWork _saveWork) {
-            //Automatically created and passed arguments using reflection.
-            this.saveWork = _saveWork;
-        }
+        Atom<List<WidgetConfig>> m_WidgetInfo = new Atom<List<WidgetConfig>>(new List<WidgetConfig>());
+        public IEnumerable<WidgetConfig> WidgetInfo => m_WidgetInfo.Value;
 
-        public override string ProcessName => nameof(GetWork);
-        protected override TimeSpan RunDelay => new TimeSpan(0, 0, 1);
-
-        protected async override Task OnInit(NpUtil util) {
-            await Task.FromResult(0);
-        }
-
-        protected async override Task OnDispose(NpUtil util) {
-            await Task.FromResult(0);
-        }
-
-        private Random r = new Random();
-        protected async override Task OnRun(NpUtil util) {
-            var number = r.Next();
-            Console.WriteLine(number);
-            saveWork.Enqueue(number);
+        protected override async Task OnRun(ActorUtil util) {
+            m_WidgetInfo.Value = new List<WidgetConfig> {
+                new WidgetConfig { Id = 1, Name = "Widget One", Type = "TYPE1" }, 
+                new WidgetConfig { Id = 2, Name = "Widget Two", Type = "TYPE2" }, 
+            };
             await Task.FromResult(0);
         }
     }
 
-    /// <summary>
-    /// This will write numbers to disk every 15 seconds.
-    /// It will be automatically created using reflection,
-    /// and passed to anything which needs a reference to it.
-    /// </summary>
-    [NanoDI]
-    class SaveWork : NanoQueue<int> {
+    [Singleton]
+    class ManageTheWidgetMonitors : Scene {
+        [Singleton]
+        CacheTheWidgetConfigurations widgetCache;
 
-        public override string ProcessName => nameof(SaveWork);
-        protected override TimeSpan RunDelay => new TimeSpan(0, 0, 15);
-
-        protected async override Task OnInit(NpUtil util) {
+        protected override async Task<IEnumerable<Role>> CastActors(ActorUtil util, Dictionary<int, Actor> myActors) {
             await Task.FromResult(0);
-        }
+            return widgetCache.WidgetInfo.Select(widgetInfo => new Role {
+                Id = widgetInfo.Id,
+                Type = getWidgetType(widgetInfo.Type)
+            }).Where(x => x.Type != null);
 
-        protected async override Task OnDispose(NpUtil util) {
-            await Task.FromResult(0);
-        }
-
-        protected async override Task<Queue<int>> OnRun(NpUtil util, Queue<int> items) {
-            var sb = new StringBuilder();
-            while (items.Count > 0) {
-                sb.AppendLine(items.Dequeue().ToString());
+            Type getWidgetType(string configType) {
+                switch (configType) {
+                    case "TYPE1":
+                        return typeof(WidgetMonitor_Type1);
+                    case "TYPE2":
+                        return typeof(WidgetMonitor_Type2);
+                    default:
+                        util.Log.RealTime(null, this.ActorName, $"Unknown widget type: {configType}");
+                        return null;
+                }
             }
-            await File.WriteAllTextAsync("./numbers.txt", sb.ToString());
-            return items;
         }
     }
 
-    /// <summary>
-    /// The simplest version of a logging class.
-    /// </summary>
-    class Logger : INanoProcessLogger {
-        public void Error(string context, string location, string message) {
-            Console.WriteLine($"Context: {(context ?? "null")}, Location: {(location ?? "null")}, Message: {message ?? "null"}");
-        }
+    public abstract class WidgetMonitor : Actor {
 
-        public void Error(string context, string location, Exception ex) {
-            this.Error(context, location, ex?.ToString());
-        }
+        protected abstract WidgetData CheckOnWidget(WidgetConfig info);
 
-        public void RealTime(string context, string location, string message) {
-            this.Error(context, location, message);
-        }
+        [Singleton]
+        CacheTheWidgetConfigurations widgetCache;
+        [Singleton]
+        PushWidgetDataToTheDatabase databasePusher;
 
-        public void RealTime(string context, string location, Exception ex) {
-            this.Error(context, location, ex);
+        protected override TimeSpan RunDelay => new TimeSpan(0, 0, 2);
+
+        private Atom<string> name = new Atom<string>("Unknown");
+        public override string ActorName => name.Value;
+
+        protected override async Task OnRun(ActorUtil util) {
+            var myInfo = widgetCache.WidgetInfo.First(x => x.Id == this.Id);
+
+            name.Value = $"{myInfo.Name} :: {myInfo.Id}";
+
+            var data = CheckOnWidget(myInfo);
+            databasePusher.DataToPush.Enqueue(data);
+            await Task.FromResult(0);
         }
     }
+
+    [Instance]
+    class WidgetMonitor_Type1 : WidgetMonitor {
+        protected override WidgetData CheckOnWidget(WidgetConfig info) {
+            return new WidgetData {
+                Id = this.Id,
+                IsAlive = new Random().Next(4) != 0,
+            };
+        }
+    }
+
+    [Instance]
+    class WidgetMonitor_Type2 : WidgetMonitor {
+        protected override WidgetData CheckOnWidget(WidgetConfig info) {
+            return new WidgetData {
+                Id = this.Id,
+                IsAlive = new Random().Next(8) != 0,
+            };
+        }
+    }
+
+    [Singleton]
+    class PushWidgetDataToTheDatabase : Actor {
+
+        public MessageQueue<WidgetData> DataToPush = new MessageQueue<WidgetData>();
+
+        protected override async Task OnRun(ActorUtil util) {
+            if (DataToPush.TryDequeue(out var widgetData)) {
+                Console.WriteLine($"SENT TO DATABASE: '{widgetData}'");
+            }
+            await Task.FromResult(0);
+        }
+    }
+
+    public class WidgetData {
+        public int Id { get; set; }
+        public bool IsAlive { get; set; }
+
+        public override string ToString() {
+            return $"{Id} :: {(IsAlive ? "Alive" : "Dead")}";
+        }
+    }
+
+    public class WidgetConfig {
+        public int Id { get; set; }
+        public string Name { get; set; }
+        public string Type { get; set; }
+    }
+
 }
 ```
-
-Currently, there is no support for automagically instantiating an interface.
-While it wouldn't be too difficult to extend the startup Util class to allow
-this via something like util.SetInterface<IDoSomething, DoSomething>(), I think interfaces
-are overused in the 1 interface per class anti-pattern, so I'm not in a rush to do this.
-Processes which require interfaces in their constructors can instantiate themselves in
-the manual start up code.
