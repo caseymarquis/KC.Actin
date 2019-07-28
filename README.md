@@ -29,7 +29,7 @@ namespace Example.Actin
     {
         static void Main(string[] args)
         {
-            new Director("log.txt").Run().Wait();
+            new Director("./log").Run().Wait();
         }
     }
 
