@@ -1,9 +1,7 @@
 ﻿using KC.Actin;
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 
 namespace Example.Actin
@@ -12,275 +10,123 @@ namespace Example.Actin
     {
         static void Main(string[] args)
         {
-            var director = new Director(new Logger());
-            director.PrintGraphToDebug = true;
-            //This will run until the user hits Q or Escape. (If Environment is interactive.)
-            //Otherwise, it will run until director.Dispose() is called.
-            //All Actors/Scenes marked with the Singleton attribute will be automatically created
-            //and passed their dependencies.
-            director.Run(startUp_loopUntilSucceeds: true, startUp: async (util) => {
-                //Run special startup code if needed, and manually add processes or dependencies.
-                //This is useful if you need to do something like ensuring a database is migrated before
-                //starting the application.
-                Console.WriteLine("This runs before processes are automatically instantiated.");
-                await Task.FromResult(0);
-            }).Wait();
-
-            //It's worth mentioning here that if you create an Actor to start/stop ASP.NET,
-            //there is an extension method to add all Actin singletons as ASP.NET dependency injection services.
-            //This allows you to natively access Actin dependencies in ASP.NET.
-            //TODO: Write this extension and put a preview line of code here.
+            new Director("./log").Run().Wait();
         }
     }
 
-    /// <summary>
-    /// This will generate a new number once per second.
-    /// </summary>
     [Singleton]
-    class GetWork : Actor {
+    class CacheTheWidgetConfigurations : Actor {
+        protected override TimeSpan RunDelay => new TimeSpan(0, 0, 5);
 
-        //Automatically created and passed arguments using reflection.
+        Atom<List<WidgetConfig>> m_WidgetInfo = new Atom<List<WidgetConfig>>(new List<WidgetConfig>());
+        public IEnumerable<WidgetConfig> WidgetInfo => m_WidgetInfo.Value;
+
+        protected override async Task OnRun(ActorUtil util) {
+            m_WidgetInfo.Value = new List<WidgetConfig> {
+                new WidgetConfig { Id = 1, Name = "Widget One", Type = "TYPE1" }, 
+                new WidgetConfig { Id = 2, Name = "Widget Two", Type = "TYPE2" }, 
+            };
+            await Task.FromResult(0);
+        }
+    }
+
+    [Singleton]
+    class ManageTheWidgetMonitors : Scene {
         [Singleton]
-        private SaveWork saveWork;
+        CacheTheWidgetConfigurations widgetCache;
 
-        protected override TimeSpan RunDelay => new TimeSpan(0, 0, 1);
-
-        private Random r = new Random();
-        protected async override Task OnRun(ActorUtil util) {
-            var number = r.Next();
-            Console.WriteLine(number);
-            saveWork.WorkToSave.Enqueue(number);
-            await Task.FromResult(0);
-        }
-    }
-
-    /// <summary>
-    /// This will write numbers to disk every 15 seconds.
-    /// It will be automatically created using reflection,
-    /// and passed to anything which needs a reference to it.
-    /// </summary>
-    [Singleton]
-    class SaveWork : Actor {
-
-        protected override TimeSpan RunDelay => new TimeSpan(0, 0, 15);
-
-        //This is just a thread safe queue with some utility functions on it.
-        public MessageQueue<int> WorkToSave = new MessageQueue<int>();
-
-        protected async override Task OnRun(ActorUtil util) {
-            if (WorkToSave.TryDequeueAll(out var items)) {
-                var sb = new StringBuilder();
-                foreach (var item in items) {
-                    sb.AppendLine(item.ToString());
-                }
-                await File.WriteAllTextAsync("./numbers.txt", sb.ToString());
-            }
-        }
-    }
-
-    [Singleton]
-    class ASceneWithConcreteActors : Scene<CountAndPrint> {
-        Random r = new Random();
-        //This is run every 3 seconds by default, and is used to figure out which Actors need to be disposed or created:
-        protected override async Task<IEnumerable<Role>> CastActors(ActorUtil util, Dictionary<int, CountAndPrint> myActors) {
-            //Normally, you would check a database or some configuration data to figure out which Actors should be running.
-            //We're just picking some random numbers instead. Ids can use types other than int. This is shown further down.
-            //Note that the Scene also has an Id type, and could itself be managed by another scene, or have its own Instance dependencies.
-
-            //If the list of Ids differs from the list of running actors, the scene will resolve that difference.
-            return await Task.FromResult(new Role[] {
-                new Role { Id = r.Next(10) },
-                new Role { Id = r.Next(10) },
-                new Role { Id = r.Next(10) },
-                new Role { Id = r.Next(10) },
-                new Role { Id = r.Next(10) },
-                new Role { Id = r.Next(10) },
-                new Role { Id = r.Next(10) },
-                new Role { Id = r.Next(10) },
-                new Role { Id = r.Next(10) },
-                new Role { Id = r.Next(10) },
-            });
-        }
-    }
-
-    //If a scene is going to instantiate
-    [Instance]
-    class CountAndPrint : Actor {
-        [Instance]
-        private PrintTwos printTwos;
-        [Instance]
-        private PrintThrees printThrees;
-        [Instance]
-        private PrintSomethingElse printSomethingElse;
-
-        private int count = 0;
-        protected override async Task OnRun(ActorUtil util) {
-            count++;
-            if (count % 2 == 0) {
-                printTwos.Work.Enqueue(count);
-            }
-            else if (count % 3 == 0) {
-                printThrees.Work.Enqueue(count);
-            }
-            await Task.FromResult(0);
-        }
-
-        public void ReportNine() {
-            Console.WriteLine("Nine was reported.");
-        }
-    }
-
-    class PrintTwos : Actor {
-        public MessageQueue<int> Work = new MessageQueue<int>();
-
-        //This will be pulled from the matching instance dependency on the parent.
-        [Sibling] 
-        private PrintSomethingElse printSomethingElse;
-
-        protected override async Task OnRun(ActorUtil util) {
-            while (Work.TryDequeue(out var number)) {
-                if (number == 10) {
-                    printSomethingElse.Work.Enqueue("");
-                }
-                Console.WriteLine($"{number} is divisible by 2.");
-            }
-            await Task.FromResult(0);
-        }
-    }
-
-    class PrintThrees : Actor {
-        public MessageQueue<int> Work = new MessageQueue<int>();
-
-        [Parent]
-        private CountAndPrint parent;
-
-        protected override async Task OnRun(ActorUtil util) {
-            while (Work.TryDequeue(out var number)) {
-                if (number == 9) {
-                    parent.ReportNine();
-                }
-                Console.WriteLine($"{number} is divisible by 3.");
-            }
-            await Task.FromResult(0);
-        }
-    }
-
-    class PrintSomethingElse : Actor {
-        public MessageQueue<string> Work = new MessageQueue<string>();
-
-        protected override async Task OnRun(ActorUtil util) {
-            while (Work.TryDequeue(out var msg)) {
-                Console.WriteLine(msg);
-            }
-            await Task.FromResult(0);
-        }
-    }
-
-    [Singleton]
-    class ASceneWithAbstractActors : Scene<TransformNumber> {
-        protected override async Task<IEnumerable<Role>> CastActors(ActorUtil util, Dictionary<int, TransformNumber> myActors) {
-            //The actor with id 2 will be repeatedly created, then disposed, then created.
-            myActors.Values.Where(x => x.Id == 2).FirstOrDefault()?.Dispose();
-            return await Task.FromResult(new Role[] {
-                new Role {
-                    Id = 1,
-                    Type = typeof(IncrementNumber) //You would also check the database to see what this type should be.
-                },
-                new Role {
-                    Id = 2,
-                    Type = typeof(DecrementNumber)
-                }
-            });
-        }
-    }
-
-    abstract class TransformNumber : Actor {
-        protected abstract Task<int> Transform(ActorUtil util, int x);
-
-        Random r = new Random();
-        protected override async Task OnRun(ActorUtil util) {
-            var x = r.Next(10);
-            Console.WriteLine($"Number Transformed: {x} => {await Transform(util, x)}");
-        }
-    }
-
-    [Instance]
-    class IncrementNumber : TransformNumber {
-        protected override async Task<int> Transform(ActorUtil util, int x) {
-            return await Task.FromResult(++x);
-        }
-    }
-
-    [Instance]
-    class DecrementNumber : TransformNumber {
-        protected override async Task<int> Transform(ActorUtil util, int x) {
-            return await Task.FromResult(--x);
-        }
-    }
-
-    [Singleton]
-    class ASceneWithNoGenericConstraints : Scene {
         protected override async Task<IEnumerable<Role>> CastActors(ActorUtil util, Dictionary<int, Actor> myActors) {
-            return await Task.FromResult(new Role[] {
-                new Role {
-                    Id = 1,
-                    Type = typeof(IncrementNumber) //You would also check the database to see what this type should be.
-                },
-                new Role {
-                    Id = 2,
-                    Type = typeof(CountAndPrint)
+            await Task.FromResult(0);
+            return widgetCache.WidgetInfo.Select(widgetInfo => new Role {
+                Id = widgetInfo.Id,
+                Type = getWidgetType(widgetInfo.Type)
+            }).Where(x => x.Type != null);
+
+            Type getWidgetType(string configType) {
+                switch (configType) {
+                    case "TYPE1":
+                        return typeof(WidgetMonitor_Type1);
+                    case "TYPE2":
+                        return typeof(WidgetMonitor_Type2);
+                    default:
+                        util.Log.RealTime(null, this.ActorName, $"Unknown widget type: {configType}");
+                        return null;
                 }
-            });
+            }
         }
     }
 
-    /// <summary>
-    /// Under the hood, both Actor and Scene ids are generic.
-    /// This means you're not stuck using ints.
-    /// This is the most complex generic base class, which changes the type of both the Actor and Scene ids.
-    /// All of a Scene's Actors must use the same type of id, but may otherwise may be different types
-    /// (unless purposefully constrained by the generic arguments).
-    /// </summary>
+    public abstract class WidgetMonitor : Actor {
+
+        protected abstract WidgetData CheckOnWidget(WidgetConfig info);
+
+        [Singleton]
+        CacheTheWidgetConfigurations widgetCache;
+        [Singleton]
+        PushWidgetDataToTheDatabase databasePusher;
+
+        protected override TimeSpan RunDelay => new TimeSpan(0, 0, 2);
+
+        private Atom<string> name = new Atom<string>("Unknown");
+        public override string ActorName => name.Value;
+
+        protected override async Task OnRun(ActorUtil util) {
+            var myInfo = widgetCache.WidgetInfo.First(x => x.Id == this.Id);
+
+            name.Value = $"{myInfo.Name} :: {myInfo.Id}";
+
+            var data = CheckOnWidget(myInfo);
+            databasePusher.DataToPush.Enqueue(data);
+            await Task.FromResult(0);
+        }
+    }
+
+    [Instance]
+    class WidgetMonitor_Type1 : WidgetMonitor {
+        protected override WidgetData CheckOnWidget(WidgetConfig info) {
+            return new WidgetData {
+                Id = this.Id,
+                IsAlive = new Random().Next(4) != 0,
+            };
+        }
+    }
+
+    [Instance]
+    class WidgetMonitor_Type2 : WidgetMonitor {
+        protected override WidgetData CheckOnWidget(WidgetConfig info) {
+            return new WidgetData {
+                Id = this.Id,
+                IsAlive = new Random().Next(8) != 0,
+            };
+        }
+    }
+
     [Singleton]
-    class ASceneWithCustomizedTypes : Scene<Actor<Role<long>, long>, Role<long>, long, Role<string>, string> {
-        public ASceneWithCustomizedTypes() {
-        }
+    class PushWidgetDataToTheDatabase : Actor {
 
-        protected override async Task<IEnumerable<Role<long>>> CastActors(ActorUtil util, Dictionary<long, Actor<Role<long>, long>> myActors) {
-            return await Task.FromResult(new Role<long>[] {
-                //These actors use a long for their id.
-            }); 
-        }
-    }
+        public MessageQueue<WidgetData> DataToPush = new MessageQueue<WidgetData>();
 
-    class AnActorWithCustomizedTypes : Actor<Role<long>, long>
-    {
-        protected override Task OnRun(ActorUtil util)
-        {
-            throw new NotImplementedException();
+        protected override async Task OnRun(ActorUtil util) {
+            if (DataToPush.TryDequeue(out var widgetData)) {
+                Console.WriteLine($"SENT TO DATABASE: '{widgetData}'");
+            }
+            await Task.FromResult(0);
         }
     }
 
+    public class WidgetData {
+        public int Id { get; set; }
+        public bool IsAlive { get; set; }
 
-
-    /// <summary>
-    /// The simplest version of a logging class.
-    /// </summary>
-    class Logger : IActinLogger {
-        public void Error(string context, string location, string message) {
-            Console.WriteLine($"Context: {(context ?? "null")}, Location: {(location ?? "null")}, Message: {message ?? "null"}");
-        }
-
-        public void Error(string context, string location, Exception ex) {
-            this.Error(context, location, ex?.ToString());
-        }
-
-        public void RealTime(string context, string location, string message) {
-            this.Error(context, location, message);
-        }
-
-        public void RealTime(string context, string location, Exception ex) {
-            this.Error(context, location, ex);
+        public override string ToString() {
+            return $"{Id} :: {(IsAlive ? "Alive" : "Dead")}";
         }
     }
+
+    public class WidgetConfig {
+        public int Id { get; set; }
+        public string Name { get; set; }
+        public string Type { get; set; }
+    }
+
 }
