@@ -231,8 +231,8 @@ namespace KC.Actin {
                 }
                 disposing = true;
             }
-            await ensureRunIsSynchronous.WaitAsync();
-            try {
+
+            async Task disposeThings() {
                 try {
                     this.Instantiator?.DisposeChildren(this);
                 }
@@ -246,9 +246,20 @@ namespace KC.Actin {
                     util.Log.Error(this.ActorName, "OnDispose_Self()", ex);
                 }
             }
-            finally {
-                ensureRunIsSynchronous.Release();
+
+            if (await ensureRunIsSynchronous.WaitAsync(3000)) {
+                try {
+                    await disposeThings();
+                }
+                finally {
+                    ensureRunIsSynchronous.Release();
+                }
             }
+            else {
+                util.Log.Error(this.ActorName, "OnDispose_Self()", "Disposed without locking. Unable to acquire lock.");
+                await disposeThings();
+            }
+            
         }
     }
 }
