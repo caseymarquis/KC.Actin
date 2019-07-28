@@ -6,11 +6,11 @@
     <Authors>Casey Marquis</Authors>
     <Company />
     <PackageLicenseUrl>https://github.com/caseymarquis/KC.NanoProcesses/blob/master/LICENSE.md</PackageLicenseUrl>
-    <PackageProjectUrl>https://github.com/caseymarquis/KC.NanoProcesses</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/caseymarquis/KC.NanoProcesses</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/caseymarquis/KC.Actin</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/caseymarquis/KC.Actin</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <AllowedOutputExtensionsInPackageBuildOutputFolder>$(AllowedOutputExtensionsInPackageBuildOutputFolder);.pdb</AllowedOutputExtensionsInPackageBuildOutputFolder>
-    <Version>2.0.0</Version>
+    <Version>3.0.0</Version>
     <AssemblyVersion>1.0.0.0</AssemblyVersion>
   </PropertyGroup>
 
