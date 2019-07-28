@@ -174,7 +174,10 @@ namespace KC.Actin {
             }
         }
 
-        public async Task Run(Func<StartupUtil, Task> startUp, bool startUp_loopUntilSucceeds, params Assembly[] assembliesToCheckForDI) {
+        public async Task Run(Func<StartupUtil, Task> startUp = null, bool startUp_loopUntilSucceeds = true, params Assembly[] assembliesToCheckForDI) {
+            if (startUp == null) {
+                startUp = async (_) => { await Task.FromResult(0); };
+            }
             lock (lockRunning) {
                 if (__running__) {
                     return;
