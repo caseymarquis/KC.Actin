@@ -14,7 +14,7 @@ Actin is a single process 'Actor Framework' for the dot net platform. In the sam
 3. You need these tasks to interact with each other in complex ways (ie Queue the widget data to be stored in the database, periodically check if the database is up, then batch write the data to the database).
 4. You want to write as little code as possible.
 
-Below is an asynchronous multi-threaded application that effectively coordinates all that in around 100 lines of code (minus talking to an actual database or actual widgets). Instantiation is automated. Dependencies are magically provided. Error logging is automated. Disposal is automated. All you need to do is write the app, and remember that each process is running independently so you need locks on shared resources (The MesssageQueue and Atom types are used for this below).
+Below is an asynchronous multi-threaded application that effectively coordinates all that in around 100 lines of code (minus talking to an actual database or actual widgets). Instantiation is automated. Dependencies are magically provided. Error logging is automated. Disposal is automated. All you need to do is write the app, and remember that each Actor is running independently so you need locks on shared resources (The MesssageQueue and Atom types are used for this below).
 
 ```C#
 using KC.Actin;
