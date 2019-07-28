@@ -140,7 +140,7 @@ namespace KC.Actin {
 
         private bool shuttingDown = false;
         public void Dispose() {
-            this.log?.Error("Shutdown", "ActinLoopShutdown", "Shutdown");
+            this.log?.Error("Shutdown", "DirectorLoopShutdown", "Shutdown");
             lock (lockRunning) {
                 if (shuttingDown) {
                     return;
@@ -306,7 +306,7 @@ namespace KC.Actin {
                 }
                 catch { }
             }
-            log.Error("", "ActinLoopStarted", "");
+            log.Error("", "DirectorLoopStarted", "");
             bool readkeyFailed = false;
             while (Running) {
                 try {
