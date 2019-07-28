@@ -9,7 +9,9 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Test.Actin", "Test_Actin\Te
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Example.Actin", "Example.Actin\Example.Actin.csproj", "{0FF4D690-9996-4D58-B755-49D78034D7C5}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KC.Actin.Analyzer", "KC.Actin.Analyzer\KC.Actin.Analyzer\KC.Actin.Analyzer.csproj", "{CB60F4AD-357B-43A8-B39A-8AD8BCAD13F1}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "KC.Actin.Analyzer", "KC.Actin.Analyzer\KC.Actin.Analyzer\KC.Actin.Analyzer.csproj", "{CB60F4AD-357B-43A8-B39A-8AD8BCAD13F1}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KC.Actin.Mvc", "KC.Actin.Mvc\KC.Actin.Mvc.csproj", "{041A2DDD-5E7C-41F4-86A7-7B4CB216C8E1}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -33,6 +35,10 @@ Global
 		{CB60F4AD-357B-43A8-B39A-8AD8BCAD13F1}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{CB60F4AD-357B-43A8-B39A-8AD8BCAD13F1}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{CB60F4AD-357B-43A8-B39A-8AD8BCAD13F1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{041A2DDD-5E7C-41F4-86A7-7B4CB216C8E1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{041A2DDD-5E7C-41F4-86A7-7B4CB216C8E1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{041A2DDD-5E7C-41F4-86A7-7B4CB216C8E1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{041A2DDD-5E7C-41F4-86A7-7B4CB216C8E1}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
