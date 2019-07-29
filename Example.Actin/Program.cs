@@ -41,7 +41,6 @@ namespace Example.Actin
                 Id = widgetInfo.Id,
                 Type = getWidgetType(widgetInfo.Type)
             }).Where(x => x.Type != null);
-
             Type getWidgetType(string configType) {
                 switch (configType) {
                     case "TYPE1":
@@ -75,7 +74,10 @@ namespace Example.Actin
 
             name.Value = $"{myInfo.Name} :: {myInfo.Id}";
 
-            var data = CheckOnWidget(myInfo);
+            var data = util.Try("CheckWidget", () => CheckOnWidget(myInfo))
+                .ErrorMessage("Widget check failed.")
+                .SwallowExceptionWithoutCatch()
+                .Execute();
             databasePusher.DataToPush.Enqueue(data);
             await Task.FromResult(0);
         }

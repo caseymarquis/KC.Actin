@@ -1,4 +1,5 @@
-﻿using System;
+﻿using KC.Actin.ActorUtilNS;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Text;
@@ -28,6 +29,8 @@ namespace KC.Actin {
     public abstract class Actor_SansType : IDisposable {
         public abstract string IdString { get; }
         internal abstract void SetId(object id);
+
+        public ActorLog ActorLog { get; private set; } = new ActorLog();
         internal ActinInstantiator Instantiator { get; set; }
 
         /// <summary>
@@ -40,6 +43,7 @@ namespace KC.Actin {
         private string m_ActorName;
         public Actor_SansType() {
             m_ActorName = this.GetType().Name;
+            this.util = new ActorUtil(this);
         }
 
         /// <summary>
@@ -90,6 +94,7 @@ namespace KC.Actin {
         bool isRunning = false;
 
         private SemaphoreSlim ensureRunIsSynchronous = new SemaphoreSlim(1, 1);
+        private ActorUtil util;
 
         public bool ShouldBeRunNow(DateTimeOffset utcNow) {
             lock (lockEverything) {
@@ -148,7 +153,7 @@ namespace KC.Actin {
             }
         }
 
-        public async Task<ActorDisposeHandle> Init(ActorUtil util) {
+        public async Task<ActorDisposeHandle> Init(Func<DispatchData> getDispatchData) {
             lock (lockEverything) {
                 if (this.initStarted) {
                     return null;
@@ -158,7 +163,10 @@ namespace KC.Actin {
             await ensureRunIsSynchronous.WaitAsync();
             try {
                 try {
-                    await OnInit(util);
+                    var dispatchData = getDispatchData();
+                    util.Log.AddDestination(dispatchData.MainLog);
+                    updateUtilFromDispatchData(dispatchData);
+                    await OnInit(this.util);
                     lock (lockEverything) {
                         this.initSuccessful = true;
                     }
@@ -167,7 +175,7 @@ namespace KC.Actin {
                     lock (lockEverything) {
                         this.initSuccessful = false;
                     }
-                    util.Log.Error(this.ActorName, "EventLoop.OnInit()", ex);
+                    util.Log.Error("EventLoop.OnInit()", this.ActorName, ex);
                     return null;
                 }
                 finally {
@@ -186,7 +194,7 @@ namespace KC.Actin {
         }
 
         private Stopwatch watch = new Stopwatch();
-        public async Task Run(ActorUtil util) {
+        public async Task Run(Func<DispatchData> getDispatchData) {
             lock (lockEverything) {
                 isRunning = true;
                 watch.Restart();
@@ -194,6 +202,7 @@ namespace KC.Actin {
             await ensureRunIsSynchronous.WaitAsync();
             try {
                 try {
+                    updateUtilFromDispatchData(getDispatchData());
                     await OnRun(util);
                 }
                 catch (Exception ex) {
@@ -203,7 +212,7 @@ namespace KC.Actin {
                     lock (lockEverything) {
                         isRunning = false;
                         watch.Stop();
-                        lastRanUtc = util.Now.AddMilliseconds(watch.ElapsedMilliseconds);
+                        lastRanUtc = util.Started.AddMilliseconds(watch.ElapsedMilliseconds);
                     }
                 }
             }
@@ -224,7 +233,7 @@ namespace KC.Actin {
             }
         }
 
-        private async Task ActuallyDispose(ActorUtil util) {
+        private async Task ActuallyDispose(Func<DispatchData> getDispatchData) {
             lock (lockEverything) {
                 if (disposing) {
                     return;
@@ -232,34 +241,42 @@ namespace KC.Actin {
                 disposing = true;
             }
 
-            async Task disposeThings() {
+            async Task disposeThings(ActorUtil util) {
                 try {
                     this.Instantiator?.DisposeChildren(this);
                 }
                 catch (Exception ex) {
-                    util.Log.Error(this.ActorName, "OnDispose_Children()", ex);
+                    util.Log.Error("OnDispose_Children()", this.ActorName, ex);
                 }
                 try {
                     await OnDispose(util);
                 }
                 catch (Exception ex) {
-                    util.Log.Error(this.ActorName, "OnDispose_Self()", ex);
+                    util.Log.Error("OnDispose_Self()", this.ActorName, ex);
                 }
             }
 
             if (await ensureRunIsSynchronous.WaitAsync(3000)) {
                 try {
-                    await disposeThings();
+                    updateUtilFromDispatchData(getDispatchData());
+                    await disposeThings(this.util);
                 }
                 finally {
                     ensureRunIsSynchronous.Release();
                 }
             }
             else {
-                util.Log.Error(this.ActorName, "OnDispose_Self()", "Disposed without locking. Unable to acquire lock.");
-                await disposeThings();
+                updateUtilFromDispatchData(getDispatchData());
+                this.util.Log.Error(this.ActorName, "OnDispose_Self()", "Disposed without locking. Unable to acquire lock.");
+                await disposeThings(this.util);
             }
             
+        }
+
+        //We use this roundabout way of updating the util as it ensures everything happens
+        //on the local thread.
+        private void updateUtilFromDispatchData(DispatchData data) {
+            this.util.Update(data);
         }
     }
 }

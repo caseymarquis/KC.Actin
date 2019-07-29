@@ -1,4 +1,5 @@
-﻿using KC.Actin.Internal;
+﻿using KC.Actin.ActorUtilNS;
+using KC.Ricochet;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -16,6 +17,9 @@ namespace KC.Actin {
 
         private object lockProcessPool = new object();
         private List<Actor_SansType> processPool = new List<Actor_SansType>();
+
+        [RicochetIgnore]
+        public readonly Atom<DateTimeOffset?> SystemTimeOverride = new Atom<DateTimeOffset?>();
 
         private static ReaderWriterLockSlim lockDirectors = new ReaderWriterLockSlim();
         private static Dictionary<string, Director> directors = new Dictionary<string, Director>();
@@ -134,10 +138,11 @@ namespace KC.Actin {
             }
         }
 
-        private T updateUtil<T>(T util) where T : ActorUtil {
-            util.Log = log;
-            util.Now = DateTimeOffset.Now;
-            return util;
+        private DispatchData getCurrentDispatchData() {
+            return new DispatchData {
+                Time = SystemTimeOverride.Value ?? DateTimeOffset.Now,
+                MainLog = this.userLog,
+            };
         }
 
         private bool shuttingDown = false;
@@ -156,11 +161,9 @@ namespace KC.Actin {
                 disposeHandles = null;
             }
 
-            var util = updateUtil(new ActorUtil());
-            var now = DateTimeOffset.Now;
             foreach (var handle in handles) {
 #pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-                handle.DisposeProcess(util);
+                handle.DisposeProcess(getCurrentDispatchData);
 #pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
             }
 
@@ -193,14 +196,13 @@ namespace KC.Actin {
                 return false;
             }
 
-            var startUtil = updateUtil(new StartupUtil());
+            var startUtil = new StartupUtil();
             async Task runLogNow() {
                 try {
                     //https://github.com/dotnet/csharplang/issues/35
                     var logActor = userLog as Actor_SansType;
                     if (logActor != null) {
-                        startUtil = updateUtil(startUtil);
-                        await logActor.Run(startUtil);
+                        await logActor.Run(getCurrentDispatchData);
                     }
                 }
                 catch {
@@ -217,7 +219,7 @@ namespace KC.Actin {
                 else {
                     while (true) {
                         try {
-                            updateUtil(startUtil);
+                            startUtil.Update(getCurrentDispatchData());
                             await startUp(startUtil);
                             break;
                         }
@@ -367,7 +369,7 @@ namespace KC.Actin {
                                 if (handle.MustDispose) {
                                     printIfDebug("dispose-" + handle.ProcessName);
 #pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-                                    handle.DisposeProcess(updateUtil(new ActorUtil()));
+                                    handle.DisposeProcess(getCurrentDispatchData);
 #pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
                                 }
                                 else {
@@ -391,7 +393,7 @@ namespace KC.Actin {
                                 if (process.ShouldBeInit) {
                                     printIfDebug("init-" + process.ActorName);
 #pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-                                    process.Init(updateUtil(new ActorUtil())).ContinueWith(async task => {
+                                    process.Init(getCurrentDispatchData).ContinueWith(async task => {
                                         if (task.Status == TaskStatus.RanToCompletion) {
                                             if (task.Result != null) {
                                                 var handle = task.Result;
@@ -406,7 +408,7 @@ namespace KC.Actin {
                                                     }
                                                 }
                                                 if (mustDisposeNow) {
-                                                    await handle.DisposeProcess(updateUtil(new ActorUtil()));
+                                                    await handle.DisposeProcess(getCurrentDispatchData);
                                                 }
                                             }
                                         }
@@ -416,7 +418,7 @@ namespace KC.Actin {
                                 else if (process.ShouldBeRunNow(DateTimeOffset.Now)) {
                                     printIfDebug("run-" + process.ActorName);
 #pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-                                    process.Run(updateUtil(new ActorUtil()));
+                                    process.Run(getCurrentDispatchData);
 #pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
                                 }
                             }
