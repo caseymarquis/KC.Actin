@@ -36,8 +36,8 @@ namespace KC.Actin {
         private Dictionary<Type, ActinInstantiator> instantiators = new Dictionary<Type, ActinInstantiator>();
 
         public ActinStandardLogger StandardLog;
-
-        private IActinLogger log = new EmptyNpLogger();
+        private ActinLogDispatcher log = new ActinLogDispatcher();
+        private IActinLogger userLog;
 
         public bool PrintGraphToDebug = true;
 
@@ -54,15 +54,17 @@ namespace KC.Actin {
         /// <summary>
         /// Use this to create a custom logger.
         /// </summary>
-        /// <param name="log"></param>
-        public Director(IActinLogger log = null, string name = null) {
-            setup(log, name);
+        /// <param name="logDestination"></param>
+        public Director(IActinLogger logDestination = null, string name = null) {
+            setup(logDestination, name);
         }
 
-        private void setup(IActinLogger log, string name) {
+        private void setup(IActinLogger logDestination, string name) {
             this.AddSingletonDependency(this);
-            this.log = log ?? this.log;
-            this.AddSingletonDependency(this.log, typeof(IActinLogger));
+            userLog = logDestination ?? this.StandardLog;
+            log.AddDestination(userLog);
+            this.AddSingletonDependency(userLog, typeof(IActinLogger));
+
             lockDirectors.EnterWriteLock();
             try {
                 directors[name ?? ""] = this;
@@ -186,7 +188,7 @@ namespace KC.Actin {
             }
 
             bool logFailedStartup(Exception ex) {
-                log.Error("StartUp-Error", "StartUp", ex);
+                log.Error("StartUp", ex);
                 runLogNow().Wait();
                 return false;
             }
@@ -195,7 +197,7 @@ namespace KC.Actin {
             async Task runLogNow() {
                 try {
                     //https://github.com/dotnet/csharplang/issues/35
-                    var logActor = log as Actor;
+                    var logActor = userLog as Actor_SansType;
                     if (logActor != null) {
                         startUtil = updateUtil(startUtil);
                         await logActor.Run(startUtil);
@@ -220,7 +222,7 @@ namespace KC.Actin {
                             break;
                         }
                         catch (Exception ex) {
-                            log.Error("Critical Start Failed", "Critical Start Failed: Will try again.", ex);
+                            log.Error("Critical Start Failed.", ex);
                             await runLogNow();
                             var delayInterval = 100;
                             var retryInterval = 5000;
@@ -305,7 +307,7 @@ namespace KC.Actin {
 
             void safeLog(string location, Exception ex) {
                 try {
-                    log.Error("Main Loop", location, ex);
+                    log.Error(location, "Main Loop", ex);
                 }
                 catch { }
             }

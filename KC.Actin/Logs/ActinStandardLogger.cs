@@ -13,7 +13,7 @@ namespace KC.Actin
         protected override TimeSpan RunDelay => new TimeSpan(0, 0, 15);
 
         private object lockEverything = new object();
-        private List<NpLog> queuedLogs = new List<NpLog>();
+        private List<ActinLog> queuedLogs = new List<ActinLog>();
         private string logDir = null;
         private bool m_LogToDisk = true;
 
@@ -29,7 +29,7 @@ namespace KC.Actin
         }
 
         private object lockRealTimeCache = new object();
-        private Queue<NpLog> realTimeCache = new Queue<NpLog>();
+        private Queue<ActinLog> realTimeCache = new Queue<ActinLog>();
         private int maxRealTimeLogs = 1000;
 
         public ActinStandardLogger(string logDirectoryPath) {
@@ -57,26 +57,16 @@ namespace KC.Actin
             }
         }
 
-        public void Error(string context, string location, string message) {
-            writeLog(context, location, message, "Error");
-        }
-
-        public void Error(string context, string location, Exception ex) {
-            this.Error(context, location, ex?.ToString());
-        }
-
-        public void Simple(string message) {
-            writeLog(message, message, message, "Simple");
-        }
-
-        private void writeLog(string context, string location, string message, string type) {
-            context = context ?? "";
-            location = location ?? "";
-            message = message ?? "";
-            var log = new NpLog(DateTimeOffset.Now, context, location, message, type);
+        public void Log(ActinLog log) {
             var mustPrint = false;
             lock (lockEverything) {
                 if (m_LogToDisk) {
+                    lock (lockRealTimeCache) {
+                        while (realTimeCache.Count > maxRealTimeLogs) {
+                            realTimeCache.Dequeue();
+                        }
+                        realTimeCache.Enqueue(log);
+                    }
                     queuedLogs.Add(log);
                 }
                 else {
@@ -88,33 +78,13 @@ namespace KC.Actin
             }
         }
 
-        public void RealTime(string context, string location, string message) {
-            var now = DateTimeOffset.Now;
-            lock (lockRealTimeCache) {
-                while (realTimeCache.Count > maxRealTimeLogs) {
-                    realTimeCache.Dequeue();
-                }
-                realTimeCache.Enqueue(new NpLog(now, context, location, message, ""));
-            }
-        }
-
-        public void RealTime(string context, string location, Exception ex) {
-            this.RealTime(context, location, ex.ToString());
-        }
-
-        public List<NpLog> GetRealTimeLogs() {
-            lock (lockRealTimeCache) {
-                return realTimeCache.ToList();
-            }
-        }
-
         protected async override Task OnRun(ActorUtil util) {
-            var toWrite = new List<NpLog>();
+            List<ActinLog> toWrite = null;
             lock (lockEverything) {
                 if (queuedLogs.Count == 0) {
                     return;
                 }
-                toWrite.AddRange(queuedLogs);
+                toWrite = new List<ActinLog>(queuedLogs);
                 queuedLogs.Clear();
             }
 
@@ -173,7 +143,12 @@ namespace KC.Actin
                     sb.Append(getEscaped(log.Context));
                     sb.AppendLine("\">");
                     sb.Append("  ");
-                    sb.AppendLine(getEscaped(log.Message));
+                    if (!string.IsNullOrEmpty(log.UserMessage)) {
+                        sb.AppendLine(getEscaped(log.UserMessage));
+                        sb.AppendLine();
+                        sb.AppendLine();
+                    }
+                    sb.AppendLine(getEscaped(log.Details));
                     sb.AppendLine("</Log>");
                     if (sb.Length > 10000) {
                         await writeToDisk();
@@ -190,23 +165,25 @@ namespace KC.Actin
         }
     }
 
-    public struct NpLog {
+    public struct ActinLog {
         public DateTimeOffset Time;
         public string Context;
         public string Location;
-        public string Message;
+        public string UserMessage;
+        public string Details;
         public string Type;
 
-        public NpLog(DateTimeOffset now, string context, string location, string message, string type) : this() {
+        public ActinLog(DateTimeOffset now, string context, string location, string userMessage, string details, string type) : this() {
             Time = now;
-            Context = context;
-            Location = location;
-            Message = message;
+            Context = context ?? "";
+            Location = location ?? "";
+            UserMessage = userMessage ?? "";
+            Details = details ?? "";
             Type = type;
         }
 
         public override string ToString() {
-            return $"{Time} | {Type ?? ""} | Location: {Location ?? ""} | Context: {Context ?? ""} | {Message ?? ""}";
+            return $"{Time} | {Type ?? ""} | Location: {Location ?? ""} | Context: {Context ?? ""} | {UserMessage ?? ""} | {Details ?? ""}";
         }
     }
 }

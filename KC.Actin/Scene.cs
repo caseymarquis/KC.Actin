@@ -126,7 +126,7 @@ namespace KC.Actin {
                         newActor.SetId(role.Key);
                     }
                     catch (Exception ex) {
-                        util.Log.Error(this.IdString, $"{this.ActorName}.CreateInstance", ex);
+                        util.Log.Error($"{this.ActorName}.CreateInstance", this.IdString, ex);
                         continue;
                     }
                     copyOfMyActors[newActor.Id] = newActor;
