@@ -1,4 +1,5 @@
 ﻿using KC.Actin.ActorUtilNS;
+using KC.Actin.Logs;
 using KC.Ricochet;
 using System;
 using System.Collections.Generic;
@@ -40,7 +41,7 @@ namespace KC.Actin {
         private Dictionary<Type, ActinInstantiator> instantiators = new Dictionary<Type, ActinInstantiator>();
 
         public ActinStandardLogger StandardLog;
-        private ActinLogDispatcher log = new ActinLogDispatcher();
+        private LogDispatcher log = new LogDispatcher();
         private IActinLogger userLog;
 
         public bool PrintGraphToDebug = true;

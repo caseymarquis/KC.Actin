@@ -1,4 +1,5 @@
 ﻿using KC.Actin.ActorUtilNS;
+using KC.Actin.Logs;
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
@@ -21,7 +22,7 @@ namespace KC.Actin {
         private Stopwatch timeSinceStarted = new Stopwatch();
         private Stack<string> locations = new Stack<string>();
 
-        public ActinLogDispatcher Log { get; set; } = new ActinLogDispatcher();
+        public LogDispatcher Log { get; set; } = new LogDispatcher();
 
         private DateTimeOffset m_Started;
         public DateTimeOffset Started {
