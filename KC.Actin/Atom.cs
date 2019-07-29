@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Threading;
 
 namespace KC.Actin {
     public class Atom<T> {
@@ -12,17 +13,25 @@ namespace KC.Actin {
             m_value = value;
         }
 
-        private object lockValue = new object();
+        private ReaderWriterLockSlim lockValue = new ReaderWriterLockSlim();
         private T m_value;
         public T Value {
             get {
-                lock (lockValue) {
+                lockValue.EnterReadLock();
+                try {
                     return m_value;
+                }
+                finally {
+                    lockValue.ExitReadLock();
                 }
             }
             set {
-                lock (lockValue) {
+                lockValue.EnterWriteLock();
+                try {
                     m_value = value;
+                }
+                finally {
+                    lockValue.ExitWriteLock();
                 }
             }
         }
