@@ -248,7 +248,11 @@ namespace KC.Actin {
         private object lockSingleton = new object();
         private object singleton;
 
-        public bool HasSingletonInstance => singleton != null;
+        public bool HasSingletonInstance {
+            get {
+                lock(lockSingleton) return singleton != null;
+            }
+        } 
 
         internal object GetSingletonInstance(Director director) {
             lock (lockSingleton) {
