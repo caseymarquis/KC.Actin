@@ -1,0 +1,82 @@
+Normally, if a parent is disposed, its
+children are supposed to be disposed.
+
+What if we have two directors, one with a parent,
+and one with that parent's children.
+
+If the first director is restarted, which causes the parent to dispose,
+we don't always want all of the remote children to dispose as well.
+They might be doing something important. That's the whole point of
+having a distributed system.
+
+So what should happen, and then, how do we make it happen?
+
+So, by default, we don't want orphans. All the default behaviour should
+revolve around that. (Default behaviour should make the most common case easy.
+Same process actors should be the most common case.).
+
+However, we sometimes want to allow orphans in order to keep
+some vital process going. This does get complicated, as
+everything that vital process needs has to be provided locally.
+As such, actors which can run like this need to be explicitly designed
+for it. This goes back to Need/Demand/Request dependency statuses.
+
+My initial thought is that an actor which wants to risk being orphaned
+must specify its parent with a [Request] attribute. This explicitly states
+that the child understands that the parent may not always be available, and
+is willing to function without it. That said, that just allows the child
+to exist in an orphaned state if it needs parent access. That we're allowing orphans
+should really be something which is defined on the parent.
+
+We also need to figure out how the child is going to recognize a replacement parent.
+This is effectively an orphaned actor being adopted. 
+
+There needs to be some sort of id system which allows parents to establish connections again.
+This is inherent in scenes already. However, it should be possible to create this behavior
+with defined actors as well. We could just use the member name by default. That would make
+refactoring a bit of a nightmare though. Probably better to require an attribute which uses
+a string constant. Considering that this is only needed when the user is going out of their
+way to allow orphans, it makes sense that some extra work should be required.
+
+The [InstanceId(id: string)] attribute could be used in place of the Instance attribute
+when this is the case.
+
+Some old thoughts from before directors and actors were more clearly defined (just keeping as a reference):
+Each instance has an internal process which periodically stores the required
+state to disk. If a parent crashes, on reboot it sees the way things were supposed
+to be, and it restores them. If a network connection goes down, it will continue
+trying to correct the remote state until it is successful, even if it is restarted.
+This would necessitate the following process on saving the required state:
+1. Copy the old state to a backup file.
+2. Write to a journal that the backup file should be used.
+3. Write the new state to the existing file.
+4. Write to a journal that the latest file should be used.
+
+This prevents power outages or running out of disk space from causing a failure.
+
+Regarding instace restarts:
+-If a parent instance restarts, the child should keep running and await orders
+from the parent and otherwise try to run as usual.
+
+-If a child instance restarts, it should be a blank slate, and should await orders
+from the parent.
+
+This means that children don't need to check on their parents,
+parents need to check on their children.
+
+
+That said, in the grand scheme of things, each application instance
+knows about particular actor types, and should be capable of spawning
+these actors which are then remotely managed by a parent instance.
+
+There's not really a reason for this to operate purely as a parent/child relationship,
+other than the fact that doing so is organizationally helpful (ie, we don't have to worry about loops).
+
+Perhaps too much thought is being put into 'parent/child' relationships
+when it comes to application instances.
+On the other hand, the dependency graph works this way, and it is convenient if
+instances reflect the dependency graph.
+
+But I think that's exactly what is causing the push to think this way,
+and it's not actually the framework in which we should be thinking about it.
+

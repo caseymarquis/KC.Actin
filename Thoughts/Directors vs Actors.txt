@@ -1,0 +1,23 @@
+Summary:
+Directors are independent. They have no parents and no children.
+Actors are dependent, and may have one parent or multiple children.
+
+Let's consider an actual use case to see why this is:
+
+We have an MDC server, a DNC server, and a series of deployed devices.
+All of these are running directors which are capable of spawning
+the actors which they know about.
+
+The MDC director cares about spawning MDC actors on the devices.
+The DNC director cares about spawning DNC actors on the devices.
+The directors on the devices care about spawning the actors they 
+need to run internally and get things done.
+
+A Parent/Child relationship between directors fails here.
+Both the MDC and DNC directors would each like to have child processes on
+the device directors. Thus, each director should be awaiting orders
+from trusted peers.
+
+Directors should therefore be independent entities.
+While individual actors maintain parent/child relationships, directors do not.
+Thus, the location of an actor does not tell you where it fits in the dependency graph.
