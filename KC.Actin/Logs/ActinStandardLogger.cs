@@ -37,7 +37,7 @@ namespace KC.Actin
         }
 
         public bool TodaysLogExists {
-            get { return getTodaysLogFile().Exists; }
+            get { return getTodaysLogFile()?.Exists ?? false; }
         }
 
         protected async override Task OnInit(ActorUtil util) {
@@ -45,6 +45,9 @@ namespace KC.Actin
         }
 
         private FileInfo getTodaysLogFile() {
+            if (this.logDir == null) {
+                return null;
+            }
             var fileName = DateTimeOffset.Now.ToString("yyyy-MM-dd") + ".xml";
             var fileInfo = new FileInfo(Path.Combine(this.logDir, fileName));
             return fileInfo;
@@ -52,7 +55,7 @@ namespace KC.Actin
 
         public void DeleteTodaysLog() {
             var info = this.getTodaysLogFile();
-            if (info.Exists) {
+            if (info != null && info.Exists) {
                 info.Delete();
             }
         }
@@ -60,7 +63,7 @@ namespace KC.Actin
         public void Log(ActinLog log) {
             var mustPrint = false;
             lock (lockEverything) {
-                if (m_LogToDisk) {
+                if (m_LogToDisk && logDir != null) {
                     lock (lockRealTimeCache) {
                         while (realTimeCache.Count > maxRealTimeLogs) {
                             realTimeCache.Dequeue();
@@ -89,11 +92,12 @@ namespace KC.Actin
             }
 
             var fileInfo = getTodaysLogFile();
+            if (fileInfo != null) {
+                return;
+            }
+
             if (!fileInfo.Directory.Exists) {
                 fileInfo.Directory.Create();
-            }
-            if (!fileInfo.Exists) {
-
             }
             using (var stream = File.OpenWrite(fileInfo.FullName)) {
                 var endBytes = Encoding.UTF8.GetBytes("</Logs>");
