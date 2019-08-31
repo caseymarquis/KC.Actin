@@ -219,9 +219,9 @@ namespace KC.Actin {
                     List<Exception> exceptions = null;
                     try {
                         var asDisposable = childInstance as IDisposable;
-                        asDisposable.Dispose();
                         if (childInstance is Actor_SansType) {
                             //Let it dispose of its own child dependencies.
+                            asDisposable?.Dispose();
                         }
                         else {
                             //Dispose of its child dependencies now:
