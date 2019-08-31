@@ -219,13 +219,17 @@ namespace KC.Actin {
                     List<Exception> exceptions = null;
                     try {
                         var asDisposable = childInstance as IDisposable;
-                        if (childInstance is Actor_SansType) {
-                            //Let it dispose of its own child dependencies.
+                        try {
                             asDisposable?.Dispose();
                         }
-                        else {
-                            //Dispose of its child dependencies now:
-                            dep.Instantiator?.DisposeChildren(childInstance);
+                        finally {
+                            if (childInstance is Actor_SansType) {
+                                //Let it dispose its own child dependencies.
+                            }
+                            else {
+                                //Dispose its child dependencies now:
+                                dep.Instantiator?.DisposeChildren(childInstance);
+                            }
                         }
                     }
                     catch (Exception ex) {
