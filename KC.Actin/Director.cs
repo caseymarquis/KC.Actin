@@ -61,6 +61,7 @@ namespace KC.Actin {
         /// </summary>
         /// <param name="logDestination"></param>
         public Director(IActinLogger logDestination = null, string name = null) {
+            this.StandardLog = new ActinStandardLogger(null);
             setup(logDestination, name);
         }
 
