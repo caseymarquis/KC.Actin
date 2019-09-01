@@ -206,11 +206,11 @@ namespace KC.Actin {
                         }
                     }
                 }
+            }
 
-                //Add all child actors to the pool, as all of their dependencies have now been resolved.
-                foreach (var dep in unresolvedInstanceDependencies.Where(x => x.Instance is Actor_SansType)) {
-                    director?.AddActor((Actor_SansType)dep.Instance);
-                }
+            //Add all child actors to the pool, as all of their dependencies have now been resolved.
+            foreach (var dep in unresolvedInstanceDependencies.Where(x => x.Instance is Actor_SansType)) {
+                director?.AddActor((Actor_SansType)dep.Instance);
             }
         }
 
