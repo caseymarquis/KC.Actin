@@ -72,20 +72,20 @@ namespace KC.Actin {
             if (!runBefore) {
                 var allAccessors = Ricochet.Util.GetPropsAndFields(this.Type, x => x.IsClass);
                 foreach (var memberAccessor in allAccessors) {
-                    AccessorInstantiatorPair getPair() =>
+                    AccessorInstantiatorPair getPair(bool flexible) =>
                         new AccessorInstantiatorPair {
                             Accessor = memberAccessor,
-                            Instantiator = getInstantiatorFromType(memberAccessor.Type),
+                            Instantiator = flexible? null : getInstantiatorFromType(memberAccessor.Type),
                         };
 
                     if (memberAccessor.Markers.Contains(nameof(SingletonAttribute))) {
-                        this.SingletonDependencies.Add(getPair());
+                        this.SingletonDependencies.Add(getPair(flexible: false));
                     }
                     else if (memberAccessor.Markers.Contains(nameof(InstanceAttribute))) {
-                        this.InstanceDependencies.Add(getPair());
+                        this.InstanceDependencies.Add(getPair(flexible: false));
                     }
                     else if (memberAccessor.Markers.Contains(nameof(ParentAttribute))) {
-                        var pair = getPair();
+                        var pair = getPair(flexible: false);
                         if (lineage == null) {
                             throw new ApplicationException($"{this.Type.Name} has a parent attribute, but is being used as a root dependency. Use the FlexibleParent attribute if {this.Type.Name} only sometimes has a parent available, or if the type of the parent may change.");
                         }
@@ -99,10 +99,10 @@ namespace KC.Actin {
                         this.ParentDependencies.Add(pair);
                     }
                     else if (memberAccessor.Markers.Contains(nameof(FlexibleParentAttribute))) {
-                        this.ParentDependencies.Add(getPair());
+                        this.ParentDependencies.Add(getPair(flexible: true));
                     }
                     else if (memberAccessor.Markers.Contains(nameof(SiblingAttribute))) {
-                        var pair = getPair();
+                        var pair = getPair(flexible: false);
                         if (lineage == null) {
                             throw new ApplicationException($"{this.Type.Name} has a sibling attribute, but is being used as a root dependency. Use the FlexibleSibling attribute if {this.Type.Name} only sometimes has a parent available, or if the type of the parent may change.");
                         }
@@ -119,7 +119,7 @@ namespace KC.Actin {
                         this.SiblingDependencies.Add(pair);
                     }
                     else if (memberAccessor.Markers.Contains(nameof(FlexibleSiblingAttribute))) {
-                        this.SiblingDependencies.Add(getPair());
+                        this.SiblingDependencies.Add(getPair(flexible: true));
                     }
                 }
                 runBefore = true;
@@ -279,6 +279,7 @@ namespace KC.Actin {
         }
 
         class AccessorInstantiatorPair {
+            //This is expected to be null when a parent or sibling is flexible:
             public ActinInstantiator Instantiator;
             public PropertyAndFieldAccessor Accessor;
             //Used for get a sibling member from a parent:
