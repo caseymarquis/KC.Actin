@@ -169,6 +169,37 @@ namespace KC.Actin {
 #pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
             }
 
+            var singletonPocoInstantiators = new List<ActinInstantiator>();
+            lock (this.lockInstantiators) {
+                foreach (var instantiator in instantiators.Values) {
+                    if (instantiator.IsRootSingleton && !instantiator.IsActor) {
+                        if (instantiator.HasSingletonInstance) {
+                            singletonPocoInstantiators.Add(instantiator);
+                        }
+                    }
+                }
+            }
+
+            foreach (var instantiator in singletonPocoInstantiators) {
+                var instance = instantiator.GetSingletonInstance(this);
+                if (instantiator == null) {
+                    continue;
+                }
+                try {
+                    instantiator.DisposeChildren(instance);
+                }
+                catch (Exception ex) {
+                    this.log?.Error("Shutdown", $"{instantiator.Type.Name}.DisposeChildren", ex);
+                }
+                try {
+                    var asDisposable = instance as IDisposable;
+                    asDisposable?.Dispose();
+                }
+                catch (Exception ex) {
+                    this.log?.Error("Shutdown", $"{instantiator.Type.Name}.DisposeInstance", ex);
+                }
+            }
+
             lockDirectors.EnterWriteLock();
             try {
                 var match = directors.FirstOrDefault(x => x.Value == this);
@@ -277,13 +308,18 @@ namespace KC.Actin {
                         rootableInstantiators = rootableInstantiators.Where(startUtil.rootActorFilter).ToList();
                     }
                     foreach (var instantiator in rootableInstantiators) {
-                        instantiator.Build(t => {
-                            if (!this.instantiators.TryGetValue(t, out var dependencyInstantiator)) {
-                                dependencyInstantiator = new ActinInstantiator(t);
-                                this.instantiators[t] = dependencyInstantiator;
-                            }
-                            return dependencyInstantiator;
-                        });
+                        try {
+                            instantiator.Build(t => {
+                                if (!this.instantiators.TryGetValue(t, out var dependencyInstantiator)) {
+                                    dependencyInstantiator = new ActinInstantiator(t);
+                                    this.instantiators[t] = dependencyInstantiator;
+                                }
+                                return dependencyInstantiator;
+                            });
+                        }
+                        catch(Exception ex) {
+                            throw new ApplicationException($"Failed to build rootable type {instantiator.Type.Name}: {ex.Message}", ex);
+                        }
                     }
                     foreach (var singletonInstantiator in rootableInstantiators.Where(x => x.IsRootSingleton)) {
                         singletonInstantiator.GetSingletonInstance(this);

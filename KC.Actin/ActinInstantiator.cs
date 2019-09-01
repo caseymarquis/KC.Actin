@@ -9,6 +9,7 @@ using System.Text;
 namespace KC.Actin {
     public class ActinInstantiator {
         public readonly bool IsRootSingleton;
+        public readonly bool IsActor;
         public readonly Type Type;
         private bool runBefore;
         //Null unless a Parent or Sibling attribute was used. To keep it null, use the flexible attributes instead.
@@ -25,6 +26,7 @@ namespace KC.Actin {
             providedSingletonInstance = _providedSingletonInstance;
             Type = t;
             IsRootSingleton = providedSingletonInstance != null || t.HasAttribute<SingletonAttribute>();
+            IsActor = typeof(Actor_SansType).IsAssignableFrom(t);
 
             if (_providedSingletonInstance == null) {
                 try {
