@@ -322,7 +322,7 @@ namespace KC.Actin {
                         }
                     }
                     foreach (var singletonInstantiator in rootableInstantiators.Where(x => x.IsRootSingleton)) {
-                        singletonInstantiator.GetSingletonInstance(this);
+                        var singleton = singletonInstantiator.GetSingletonInstance(this);
                     }
                 }
 
