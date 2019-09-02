@@ -128,8 +128,8 @@ namespace Test.Actin {
             Assert.Single(allDependencies.Where(x => x is SingletonPocoActorChild && x.Parent is SingletonPoco));
 
             Assert.Single(allDependencies.Where(x => x is SingletonActor));
-            Assert.Single(allDependencies.Where(x => x is SingletonActorPocoChild));
-            Assert.Single(allDependencies.Where(x => x is SingletonActorActorChild));
+            Assert.Single(allDependencies.Where(x => x is SingletonActorPocoChild && x.Parent is SingletonActor));
+            Assert.Single(allDependencies.Where(x => x is SingletonActorActorChild && x.Parent is SingletonActor));
         }
     }
 }
