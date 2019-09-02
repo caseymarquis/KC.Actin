@@ -275,7 +275,7 @@ namespace KC.Actin {
             }
         }
 
-        internal object GetInstance(Director director, object parent, ActinInstantiator parentInstantiator = null) {
+        internal object GetInstance(Director director, object parent, ActinInstantiator parentInstantiator) {
             var instance = CreateNew();
             ResolveDependencies(instance, DependencyType.Instance, parent, parentInstantiator, director);
             return instance;
