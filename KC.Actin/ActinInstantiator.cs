@@ -202,9 +202,12 @@ namespace KC.Actin {
                     else {
                         //Flexible Sibling:
                         foreach (var parentInstanceDep in parentInstantiator.InstanceDependencies) {
+                            if (parentInstanceDep.Instantiator == this) {
+                                continue;
+                            }
                             if (parentInstanceDep.Instantiator.Type.IsAssignableFrom(dep.Instantiator.Type)) {
                                 var siblingInstance = parentInstanceDep.Accessor.GetVal(parent);
-                                if (siblingInstance != null) {
+                                if (siblingInstance != null && siblingInstance != instance) {
                                     try {
                                         dep.Accessor.SetVal(instance, siblingInstance);
                                         break;
