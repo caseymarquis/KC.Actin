@@ -110,7 +110,7 @@ namespace KC.Actin {
                             StaticParentType = parentType;
                             var siblingDepPair = lineage.Last().InstanceDependencies.FirstOrDefault(x => x.Instantiator.Type == pair.Instantiator.Type);
                             if (siblingDepPair == null) {
-                                throw new ApplicationException($"{this.Type.Name}.{pair.Accessor.Name} has a sibling dependency of type {pair.Accessor.Type.Name}. Its parent is {lineage.Last().Type.Name} does not have an Instance dependency which matches this. Use the FlexibleSibling attribute if {this.Type.Name} only sometimes has a parent available, or if the type of the parent may change.");
+                                throw new ApplicationException($"{this.Type.Name}.{pair.Accessor.Name} has a sibling dependency of type {pair.Accessor.Type.Name}. Its parent {lineage.Last().Type.Name} does not have an Instance dependency which matches this. Use the FlexibleSibling attribute if {this.Type.Name} only sometimes has a parent available, or if the type of the parent may change.");
                             }
                             else {
                                 pair.SiblingDependencyPair = siblingDepPair;
