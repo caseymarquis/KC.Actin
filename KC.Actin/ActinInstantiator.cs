@@ -139,6 +139,9 @@ namespace KC.Actin {
         }
 
         internal void ResolveDependencies(object instance, DependencyType dependencyType, object parent, ActinInstantiator parentInstantiator, Director director) {
+            if (director is null) {
+                throw new NullReferenceException("Director may not be null.");
+            }
             var asActor = instance as Actor_SansType;
             if (asActor != null) {
                 asActor.Instantiator = this; //Used for automatically disposing child dependencies.
@@ -157,6 +160,14 @@ namespace KC.Actin {
                     Instance = childInstance,
                 });
                 dep.Accessor.SetVal(instance, childInstance);
+            }
+
+
+            if (instance != null) { //It should never be null, but it doesn't hurt to be safe.
+                //Note that it's important that we called this before we resolved child dependencies.
+                //The director assumes that the order it receives dependencies in is the order in
+                //which they should be initialized.
+                director.RegisterInjectedDependency(instance);
             }
             //Resolve Child Instances:
             foreach (var dep in unresolvedInstanceDependencies) {
@@ -207,11 +218,6 @@ namespace KC.Actin {
                     }
                 }
             }
-
-            //Add all child actors to the pool, as all of their dependencies have now been resolved.
-            foreach (var dep in unresolvedInstanceDependencies.Where(x => x.Instance is Actor_SansType)) {
-                director?.AddActor((Actor_SansType)dep.Instance);
-            }
         }
 
         internal void DisposeChildren(object instance) {
@@ -261,9 +267,6 @@ namespace KC.Actin {
                 if (singleton == null) {
                     singleton = providedSingletonInstance ?? CreateNew();
                     ResolveDependencies(singleton, DependencyType.Singleton, null, null, director);
-                    if (singleton is Actor_SansType) {
-                        director?.AddActor((Actor_SansType)singleton);
-                    }
                 }
                 return singleton;
             }
@@ -272,9 +275,6 @@ namespace KC.Actin {
         internal object GetInstance(Director director, object parent, ActinInstantiator parentInstantiator = null) {
             var instance = CreateNew();
             ResolveDependencies(instance, DependencyType.Instance, parent, parentInstantiator, director);
-            if (instance is Actor_SansType) {
-                director?.AddActor((Actor_SansType)instance);
-            }
             return instance;
         }
 

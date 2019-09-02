@@ -40,6 +40,9 @@ namespace KC.Actin {
         private object lockInstantiators = new object();
         private Dictionary<Type, ActinInstantiator> instantiators = new Dictionary<Type, ActinInstantiator>();
 
+        private object lockNewlyRegisteredDependencies = new object();
+        private List<object> newlyRegisteredDependencies = new List<object>();
+
         public ActinStandardLogger StandardLog;
         private LogDispatcher log = new LogDispatcher();
         private IActinLogger userLog;
@@ -84,20 +87,6 @@ namespace KC.Actin {
             get {
                 lock (lockRunning) {
                     return __running__;
-                }
-            }
-        }
-
-        internal void AddActor(Actor_SansType actor) {
-            if (actor != null) {
-                lock (lockDisposeHandles) {
-                    if (disposeHandles == null) {
-                        //Means we started shutting down.
-                        return;
-                    }
-                }
-                lock (lockProcessPool) {
-                    processPool.Add(actor);
                 }
             }
         }
@@ -333,6 +322,12 @@ namespace KC.Actin {
             await runMainLoop();
         }
 
+        internal void RegisterInjectedDependency(object instance) {
+            lock (lockNewlyRegisteredDependencies) {
+                newlyRegisteredDependencies.Add(instance);
+            }
+        }
+
         //Main Loop ======================= Main Loop:
         async Task runMainLoop() {
             var poolCopy = new List<Actor_SansType>();
@@ -426,34 +421,61 @@ namespace KC.Actin {
                     }
 
                     try {
-                        foreach (var process in poolCopy) {
-                            try {
-                                if (process.ShouldBeInit) {
-                                    printIfDebug("init-" + process.ActorName);
+                        List<object> newDependencies = null;
+                        lock (lockNewlyRegisteredDependencies) {
+                            if (newlyRegisteredDependencies.Count > 0) {
+                                newDependencies = newlyRegisteredDependencies.ToList();
+                                newlyRegisteredDependencies.Clear();
+                            }
+                        }
+                        if (newDependencies != null) {
+                            foreach (var newDependency in newDependencies) {
+                                try {
+                                    if (newDependency is Actor_SansType) {
+                                        var process = newDependency as Actor_SansType;
+                                        printIfDebug("init-" + process.ActorName);
 #pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-                                    process.Init(getCurrentDispatchData).ContinueWith(async task => {
-                                        if (task.Status == TaskStatus.RanToCompletion) {
-                                            if (task.Result != null) {
-                                                var handle = task.Result;
-                                                var mustDisposeNow = false;
-                                                lock (lockDisposeHandles) {
-                                                    if (disposeHandles != null) {
-                                                        disposeHandles.Add(handle);
+                                        process.Init(getCurrentDispatchData).ContinueWith(async task => {
+#pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+                                            if (task.Status == TaskStatus.RanToCompletion) {
+                                                if (task.Result != null) {
+                                                    var handle = task.Result;
+                                                    var mustDisposeNow = false;
+                                                    lock (lockDisposeHandles) {
+                                                        if (disposeHandles != null) {
+                                                            lock (lockProcessPool) {
+                                                                processPool.Add(process);
+                                                            }
+                                                            disposeHandles.Add(handle);
+                                                        }
+                                                        else {
+                                                            //Means that the whole application has been disposed.
+                                                            mustDisposeNow = true;
+                                                        }
                                                     }
-                                                    else {
-                                                        //Means that the whole application has been disposed.
-                                                        mustDisposeNow = true;
+                                                    if (mustDisposeNow) {
+                                                        await handle.DisposeProcess(getCurrentDispatchData);
                                                     }
-                                                }
-                                                if (mustDisposeNow) {
-                                                    await handle.DisposeProcess(getCurrentDispatchData);
                                                 }
                                             }
-                                        }
-                                    });
+                                        });
+                                    }
 #pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
                                 }
-                                else if (process.ShouldBeRunNow(DateTimeOffset.Now)) {
+                                catch (Exception ex) {
+                                    safeLog("Initializing Dependency", ex);
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex) {
+                        safeLog("Initializing Dependencies", ex);
+                    }
+
+                    try {
+                        foreach (var process in poolCopy) {
+                            try {
+                                if (process.ShouldBeRunNow(DateTimeOffset.Now)) {
                                     printIfDebug("run-" + process.ActorName);
 #pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
                                     process.Run(getCurrentDispatchData);
