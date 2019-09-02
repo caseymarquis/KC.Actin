@@ -22,10 +22,10 @@ namespace Test.Actin {
             public IHaveParent Parent { get; set; }
 
             [Singleton]
-            AllDependencies disposedList;
+            AllDependencies allDependencies;
 
             public async Task OnInit(ActorUtil util) {
-                disposedList.Dependencies.Enqueue(this);
+                allDependencies.Dependencies.Enqueue(this);
                 await Task.FromResult(0);
             }
         }
