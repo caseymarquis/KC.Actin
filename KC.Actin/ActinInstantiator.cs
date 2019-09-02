@@ -293,6 +293,10 @@ namespace KC.Actin {
             public AccessorInstantiatorPair Pair;
             public object Instance;
         }
+
+        public override string ToString() {
+            return $"{this.Type.Name} Instantiator";
+        }
     }
 
     public enum DependencyType {
