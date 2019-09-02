@@ -87,7 +87,7 @@ namespace KC.Actin {
                     else if (memberAccessor.Markers.Contains(nameof(ParentAttribute))) {
                         var pair = getPair(flexible: false);
                         if (lineage == null) {
-                            throw new ApplicationException($"{this.Type.Name} has a parent attribute, but is being used as a root dependency. Use the FlexibleParent attribute if {this.Type.Name} only sometimes has a parent available, or if the type of the parent may change.");
+                            throw new ApplicationException($"{this.Type.Name} has a parent attribute, but is being used in a scene or as a root dependency. Use the FlexibleParent attribute if {this.Type.Name} is being used in a scene or only sometimes has a parent available, or if the type of the parent may change.");
                         }
                         else if (parentType != pair.Instantiator.Type) {
                             throw new ApplicationException($"{this.Type.Name}.{pair.Accessor.Name} has a parent dependency of type {pair.Accessor.Type.Name}. Its actual parent is {parentType.Name}. Use the FlexibleParent attribute if {this.Type.Name} only sometimes has a parent available, or if the type of the parent may change.");
