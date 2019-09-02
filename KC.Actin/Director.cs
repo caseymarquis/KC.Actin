@@ -460,7 +460,14 @@ namespace KC.Actin {
                                             }
                                         });
                                     }
+                                    else if (newDependency is IOnInit) {
+#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+                                        (newDependency as IOnInit).OnInit(new ActorUtil(null) {
 #pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+                                            Log = this.log,
+                                            Started = DateTimeOffset.Now,
+                                        });
+                                    }
                                 }
                                 catch (Exception ex) {
                                     safeLog("Initializing Dependency", ex);
