@@ -4,7 +4,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace KC.Actin {
-    interface IOnInit {
+    public interface IOnInit {
         Task OnInit(ActorUtil util);
     }
 }
