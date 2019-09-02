@@ -62,7 +62,7 @@ namespace KC.Actin {
                 }
             }
 
-            var parentType = lineage?.Last().Type;
+            var parentType = lineage?.Last().Type ?? StaticParentType;
             if (StaticParentType != null && StaticParentType != parentType) {
                 //If run from two different types, some of the build type checks won't be run a second time.
                 //To ensure we catch type errors on startup, we check if the cached parent type matches the stored parent type.
