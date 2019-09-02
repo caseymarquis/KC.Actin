@@ -317,7 +317,7 @@ namespace KC.Actin {
                                 return dependencyInstantiator;
                             });
                         }
-                        catch(Exception ex) {
+                        catch (Exception ex) {
                             throw new ApplicationException($"Failed to build rootable type {instantiator.Type.Name}: {ex.Message}", ex);
                         }
                     }
