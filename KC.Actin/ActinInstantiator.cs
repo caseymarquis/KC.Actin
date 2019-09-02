@@ -199,13 +199,13 @@ namespace KC.Actin {
                             throw new ApplicationException($"Actin failed to set sibling dependency {this.Type.Name}.{dep.Accessor.Name} when using parent type {parentInstantiator?.Type.Name ?? "'Not Specified'"} and parent instance {parent ?? "null"}.", ex);
                         }
                     }
-                    else {
+                    else if(parentInstantiator != null) {
                         //Flexible Sibling:
                         foreach (var parentInstanceDep in parentInstantiator.InstanceDependencies) {
                             if (parentInstanceDep.Instantiator == this) {
                                 continue;
                             }
-                            if (parentInstanceDep.Instantiator.Type.IsAssignableFrom(dep.Instantiator.Type)) {
+                            if (dep.Accessor.Type.IsAssignableFrom(parentInstanceDep.Instantiator.Type)) {
                                 var siblingInstance = parentInstanceDep.Accessor.GetVal(parent);
                                 if (siblingInstance != null && siblingInstance != instance) {
                                     try {
