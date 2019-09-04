@@ -136,16 +136,16 @@ namespace KC.Actin {
         }
 
         /// <summary>
-        /// Returns true when the process has been scheduled to be disposed.
-        /// This property should be polled from within the OnRun() function
-        /// to see if the process has been scheduled for disposal.
+        /// Returns true when the actor has been scheduled to be disposed.
+        /// This property can be polled from within the OnRun() function
+        /// to see if the actor has been scheduled for disposal.
         /// Because OnDispose() will not run until OnRun() has finished,
-        /// this is the only way for a process's OnRun() function to find
+        /// this allows an actor's OnRun() function to find
         /// out that it needs to finish early. This is really only important
         /// when the process might run for 4 seconds, as this is the amount of
         /// time which the service waits to shut down.
         /// </summary>
-        internal bool Disposing {
+        public bool Disposing {
             get {
                 lock (lockEverything) {
                     return this.disposing;
