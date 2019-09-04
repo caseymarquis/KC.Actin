@@ -13,6 +13,7 @@ namespace KC.Actin {
     public class ActorUtil {
         public ActorUtil(Actor_SansType _actor) {
             this.actor = _actor;
+            this.Log = new LogDispatcherForActor(new LogDispatcher(), _actor);
             if (_actor != null) {
                 this.Log.AddDestination(_actor.ActorLog);
             }
@@ -22,7 +23,7 @@ namespace KC.Actin {
         private Stopwatch timeSinceStarted = new Stopwatch();
         private Stack<string> locations = new Stack<string>();
 
-        public LogDispatcher Log { get; set; } = new LogDispatcher();
+        public LogDispatcherForActor Log { get; set; }
 
         private DateTimeOffset m_Started;
         public DateTimeOffset Started {
@@ -104,7 +105,7 @@ namespace KC.Actin {
                         catch { }
 
                         if (task._loggingType != LoggingType.None) {
-                            Action<string, string, string, Exception> doLog;
+                            Action<string, string, Exception> doLog;
                             switch (task._loggingType) {
                                 case LoggingType.RealTime:
                                     doLog = Log.RealTime; break;
@@ -116,7 +117,7 @@ namespace KC.Actin {
                                     doLog = Log.RealTime; break;
                             }
                             try {
-                                doLog(actor?.ActorName ?? "" + "/" + string.Join("/", locations), actor?.IdString, task._niceErrorMessage, ex);
+                                doLog(task._niceErrorMessage, string.Join("/", locations), ex);
                             }
                             catch { }
                         }

@@ -47,6 +47,9 @@ namespace KC.Actin {
         private LogDispatcher log = new LogDispatcher();
         private IActinLogger userLog;
 
+        /// <summary>
+        /// Not yet implemented.
+        /// </summary>
         public bool PrintGraphToDebug = true;
 
         /// <summary>
@@ -462,9 +465,8 @@ namespace KC.Actin {
                                     }
                                     else if (newDependency is IOnInit) {
 #pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-                                        (newDependency as IOnInit).OnInit(new ActorUtil(null) {
+                                        (newDependency as IOnInit).OnInit(new ActorUtil(newDependency as Actor_SansType) {
 #pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-                                            Log = this.log,
                                             Started = DateTimeOffset.Now,
                                         });
                                     }
