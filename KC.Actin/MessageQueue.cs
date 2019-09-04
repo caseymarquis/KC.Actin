@@ -35,12 +35,36 @@ namespace KC.Actin {
             }
         }
 
+        /// <summary>
+        /// Place this message at the front of the queue.
+        /// </summary>
+        public void Enqueue_InFront(T message) {
+            lock (lockList) {
+                while (list.Count > m_MaxMessages) {
+                    list.RemoveAt(0);
+                }
+                list.Insert(0, message);
+            }
+        }
+
         public void EnqueueRange(IEnumerable<T> messages) {
             lock (lockList) {
                 list.AddRange(messages);
                 while (list.Count > m_MaxMessages) {
                     list.RemoveAt(0);
                 }
+            }
+        }
+
+        /// <summary>
+        /// Place these messages at the front of the queue.
+        /// </summary>
+        public void EnqueueRange_InFront(IEnumerable<T> messages) {
+            lock (lockList) {
+                while (list.Count > m_MaxMessages) {
+                    list.RemoveAt(0);
+                }
+                list.InsertRange(0, messages);
             }
         }
 
