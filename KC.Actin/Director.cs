@@ -56,7 +56,6 @@ namespace KC.Actin {
         /// This will create a standard logger which will write logs
         /// to daily files at the specified directory.
         /// </summary>
-        /// <param name="logDirectoryPath"></param>
         public Director(string logDirectoryPath, string name = null) {
             this.StandardLog = new ActinStandardLogger(logDirectoryPath);
             setup(this.StandardLog, name);
@@ -65,7 +64,6 @@ namespace KC.Actin {
         /// <summary>
         /// Use this to create a custom logger.
         /// </summary>
-        /// <param name="logDestination"></param>
         public Director(IActinLogger logDestination = null, string name = null) {
             this.StandardLog = new ActinStandardLogger(null);
             setup(logDestination, name);
