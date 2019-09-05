@@ -92,23 +92,38 @@ namespace KC.Actin {
         bool initSuccessful = false;
         bool initStarted = false;
         bool isRunning = false;
+        bool immediateRunRequested = false;
 
         private SemaphoreSlim ensureRunIsSynchronous = new SemaphoreSlim(1, 1);
         private ActorUtil util;
 
         public bool ShouldBeRunNow(DateTimeOffset utcNow) {
             lock (lockEverything) {
-                if (disposing) {
-                    return false;
+                var immediateRunRequestedWas = immediateRunRequested;
+                try {
+                    if (disposing) {
+                        return false;
+                    }
+                    if (!wasInit) {
+                        return false;
+                    }
+                    if (isRunning) {
+                        return false;
+                    }
+                    var timeSinceRan = utcNow - lastRanUtc;
+                    return (timeSinceRan > this.RunDelay);
                 }
-                if (!wasInit) {
-                    return false;
+                finally {
+                    if (immediateRunRequestedWas) {
+                        immediateRunRequested = false;
+                    }
                 }
-                if (isRunning) {
-                    return false;
-                }
-                var timeSinceRan = utcNow - lastRanUtc;
-                return (timeSinceRan > this.RunDelay);
+            }
+        }
+
+        public void RequestRun() {
+            lock (lockEverything) {
+                immediateRunRequested = true;
             }
         }
 
