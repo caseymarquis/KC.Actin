@@ -25,6 +25,8 @@ namespace KC.Actin {
 
         public LogDispatcherForActor Log { get; set; }
 
+        public string Context => $"{actor?.ActorName}-{actor?.IdString}";
+
         private DateTimeOffset m_Started;
         public DateTimeOffset Started {
             get {
