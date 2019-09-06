@@ -43,77 +43,77 @@ namespace KC.Actin.Logs {
             }
         }
 
-        private void dispatch(string context, string location, string userMessage, Exception ex, string type) {
-            dispatch(context, location, userMessage, ex?.ToString(), type);
+        private void dispatch(string context, string location, string userMessage, Exception ex, LogType logType) {
+            dispatch(context, location, userMessage, ex?.ToString(), logType);
         }
 
-        private void dispatch(string context, string location, string userMessage, string details, string type) {
-            var log = new ActinLog(DateTimeOffset.Now, context, location, userMessage, details, type);
+        private void dispatch(string context, string location, string userMessage, string details, LogType logType) {
+            var log = new ActinLog(DateTimeOffset.Now, context, location, userMessage, details, logType);
             Log(log);
         }
 
         public void Info(string location) {
-            dispatch(null, location, null, (string)null, "Info");
+            dispatch(null, location, null, (string)null, LogType.Info);
         }
 
         public void Info(string location, string context) {
-            dispatch(context, location, null, (string)null, "Info");
+            dispatch(context, location, null, (string)null, LogType.Info);
         }
 
         public void Info(string location, string context, string userMessage, Exception ex) {
-            dispatch(context, location, userMessage, ex, "Info");
+            dispatch(context, location, userMessage, ex, LogType.Info);
         }
 
         public void Info(string location, string context, string userMessage, string details = null) {
-            dispatch(context, location, userMessage, details, "Info");
+            dispatch(context, location, userMessage, details, LogType.Info);
         }
 
         public void Error(string location) {
-            dispatch(null, location, null, (string)null, "Error");
+            dispatch(null, location, null, (string)null, LogType.Error);
         }
 
         public void Error(string location, Exception ex) {
-            dispatch(null, location, null, ex, "Error");
+            dispatch(null, location, null, ex, LogType.Error);
         }
 
         public void Error(string location, string context, Exception ex) {
-            dispatch(context, location, null, ex, "Error");
+            dispatch(context, location, null, ex, LogType.Error);
         }
 
         public void Error(string location, string context, string userMessage, Exception ex) {
-            dispatch(context, location, userMessage, ex, "Error");
+            dispatch(context, location, userMessage, ex, LogType.Error);
         }
 
         public void Error(string location, string context, string userMessage, string details = null) {
-            dispatch(context, location, userMessage, details, "Error");
+            dispatch(context, location, userMessage, details, LogType.Error);
         }
 
         public void RealTime(string location) {
-            dispatch(null, location, null, (string)null, "RealTime");
+            dispatch(null, location, null, (string)null, LogType.RealTime);
         }
 
         public void RealTime(string location, string context) {
-            dispatch(context, location, null, (string)null, "RealTime");
+            dispatch(context, location, null, (string)null, LogType.RealTime);
         }
 
         public void RealTime(string location, string context, string userMessage) {
-            dispatch(context, location, userMessage, (string)null, "RealTime");
+            dispatch(context, location, userMessage, (string)null, LogType.RealTime);
         }
 
         public void RealTime(string location, Exception ex) {
-            dispatch(null, location, null, ex, "RealTime");
+            dispatch(null, location, null, ex, LogType.RealTime);
         }
 
         public void RealTime(string location, string context, Exception ex) {
-            dispatch(context, location, null, ex, "RealTime");
+            dispatch(context, location, null, ex, LogType.RealTime);
         }
 
         public void RealTime(string location, string context, string userMessage, Exception ex) {
-            dispatch(context, location, userMessage, ex, "RealTime");
+            dispatch(context, location, userMessage, ex, LogType.RealTime);
         }
 
         public void RealTime(string location, string context, string userMessage, string details = null) {
-            dispatch(context, location, userMessage, details, "RealTime");
+            dispatch(context, location, userMessage, details, LogType.RealTime);
         }
     }
 }

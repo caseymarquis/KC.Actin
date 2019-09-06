@@ -140,7 +140,7 @@ namespace KC.Actin
                     sb.Append("<Log time=\"");
                     sb.Append(getEscaped(log.Time.ToString()));
                     sb.Append("\" type=\"");
-                    sb.Append(getEscaped(log.Type));
+                    sb.Append(log.Type.ToString());
                     sb.Append("\" location=\"");
                     sb.Append(getEscaped(log.Location));
                     sb.Append("\" context=\"");
@@ -169,15 +169,21 @@ namespace KC.Actin
         }
     }
 
+    public enum LogType {
+        Info = 0,
+        Error = 1,
+        RealTime = 2
+    }
+
     public struct ActinLog {
         public DateTimeOffset Time;
         public string Context;
         public string Location;
         public string UserMessage;
         public string Details;
-        public string Type;
+        public LogType Type;
 
-        public ActinLog(DateTimeOffset now, string context, string location, string userMessage, string details, string type) : this() {
+        public ActinLog(DateTimeOffset now, string context, string location, string userMessage, string details, LogType type) : this() {
             Time = now;
             Context = context ?? "";
             Location = location ?? "";
@@ -187,7 +193,7 @@ namespace KC.Actin
         }
 
         public override string ToString() {
-            return $"{Time} | {Type ?? ""} | Location: {Location ?? ""} | Context: {Context ?? ""} | {UserMessage ?? ""} | {Details ?? ""}";
+            return $"{Time} | {Type.ToString()} | Location: {Location ?? ""} | Context: {Context ?? ""} | {UserMessage ?? ""} | {Details ?? ""}";
         }
     }
 }
