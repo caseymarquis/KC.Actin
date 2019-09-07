@@ -111,7 +111,7 @@ namespace KC.Actin {
                         return false;
                     }
                     var timeSinceRan = utcNow - lastRanUtc;
-                    return (timeSinceRan > this.RunDelay);
+                    return immediateRunRequested || (timeSinceRan > this.RunDelay);
                 }
                 finally {
                     if (immediateRunRequestedWas) {
