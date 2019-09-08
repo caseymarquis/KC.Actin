@@ -104,7 +104,8 @@ namespace Example.Actin
                     case "TYPE2":
                         return typeof(WidgetMonitor_Type2);
                     default:
-                        util.Log.RealTime(null, this.ActorName, $"Unknown widget type: {configType}");
+                        //util.Log automatically includes the id and name of the Actor calling it.
+                        util.Log.RealTime($"Unknown widget type: {configType}");
                         return null;
                 }
             }
@@ -130,6 +131,8 @@ namespace Example.Actin
 
             name.Value = $"{myInfo.Name} :: {myInfo.Id}";
 
+            //util also comes with several utility functions which
+            //make profiling and detailed error logging easier.
             var data = util.Try("CheckWidget", () => CheckOnWidget(myInfo))
                 .ErrorMessage("Widget check failed.")
                 .SwallowExceptionWithoutCatch()
