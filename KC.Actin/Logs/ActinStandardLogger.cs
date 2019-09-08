@@ -14,8 +14,9 @@ namespace KC.Actin
 
         private object lockEverything = new object();
         private List<ActinLog> queuedLogs = new List<ActinLog>();
-        private string logDir = null;
         private bool m_LogToDisk = true;
+
+        Atom<string> logFolderPath = new Atom<string>();
 
         public bool LogToDisk {
             get {
@@ -32,10 +33,6 @@ namespace KC.Actin
         private Queue<ActinLog> realTimeCache = new Queue<ActinLog>();
         private int maxRealTimeLogs = 1000;
 
-        public ActinStandardLogger(string logDirectoryPath) {
-            logDir = logDirectoryPath;
-        }
-
         public bool TodaysLogExists {
             get { return getTodaysLogFile()?.Exists ?? false; }
         }
@@ -45,11 +42,12 @@ namespace KC.Actin
         }
 
         private FileInfo getTodaysLogFile() {
-            if (this.logDir == null) {
+            var path = this.logFolderPath.Value;
+            if (path == null) {
                 return null;
             }
             var fileName = DateTimeOffset.Now.ToString("yyyy-MM-dd") + ".xml";
-            var fileInfo = new FileInfo(Path.Combine(this.logDir, fileName));
+            var fileInfo = new FileInfo(Path.Combine(path, fileName));
             return fileInfo;
         }
 
@@ -63,7 +61,7 @@ namespace KC.Actin
         public void Log(ActinLog log) {
             var mustPrint = false;
             lock (lockEverything) {
-                if (m_LogToDisk && logDir != null) {
+                if (m_LogToDisk && logFolderPath.Value != null) {
                     lock (lockRealTimeCache) {
                         while (realTimeCache.Count > maxRealTimeLogs) {
                             realTimeCache.Dequeue();
@@ -92,7 +90,7 @@ namespace KC.Actin
             }
 
             var fileInfo = getTodaysLogFile();
-            if (fileInfo != null) {
+            if (fileInfo == null) {
                 return;
             }
 
@@ -161,6 +159,10 @@ namespace KC.Actin
                 await writeToDisk();
                 await stream.WriteAsync(endBytes, 0, endBytes.Length);
             }
+        }
+
+        internal void SetLogFolderPath(string standardLogOutputFolder) {
+            this.logFolderPath.Value = standardLogOutputFolder;
         }
 
         protected async override Task OnDispose(ActorUtil util) {

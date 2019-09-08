@@ -30,9 +30,9 @@ namespace Test.Actin
         {
             var director = new Director();
             await Assert.ThrowsAsync<ApplicationException>(async () => {
-                await director.Run(startUp_loopUntilSucceeds: false,startUp: async (util) => {
+                await director.Run(startUp_loopUntilSucceeds: false,configure: async (util) => {
                     var nestedTypes = typeof(Tests_CircularDependencyDetection).GetNestedTypes();
-                    util.FilterRootActors(x => nestedTypes.Contains(x.Type));
+                    util.SetRootActorFilter(x => nestedTypes.Contains(x.Type));
                     await Task.FromResult(0);
                 }, assembliesToCheckForDI: Assembly.GetExecutingAssembly());
             });

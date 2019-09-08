@@ -24,6 +24,9 @@ namespace KC.Actin {
 
         private static ReaderWriterLockSlim lockDirectors = new ReaderWriterLockSlim();
         private static Dictionary<string, Director> directors = new Dictionary<string, Director>();
+        /// <summary>
+        /// Try to get the running director with the given name.
+        /// </summary>
         public static bool TryGetDirector(string name, out Director director) {
             lockDirectors.EnterReadLock();
             try {
@@ -43,41 +46,396 @@ namespace KC.Actin {
         private object lockNewlyRegisteredDependencies = new object();
         private List<object> newlyRegisteredDependencies = new List<object>();
 
-        public ActinStandardLogger StandardLog;
-        private LogDispatcher log = new LogDispatcher();
-        private IActinLogger userLog;
-
-        /// <summary>
-        /// Not yet implemented.
-        /// </summary>
-        public bool PrintGraphToDebug = true;
-
-        /// <summary>
-        /// This will create a standard logger which will write logs
-        /// to daily files at the specified directory.
-        /// </summary>
-        public Director(string logDirectoryPath, string name = null) {
-            this.StandardLog = new ActinStandardLogger(logDirectoryPath);
-            setup(this.StandardLog, name);
+        public async Task Run(Action<ConfigureUtil> configure = null, Func<ActorUtil, Task> startUp = null) {
+            var config = await this.init(configure ?? (_ => { }), startUp ?? (_ => Task.FromResult(0)));
+            await runMainLoop(config);
         }
 
-        /// <summary>
-        /// Use this to create a custom logger.
-        /// </summary>
-        public Director(IActinLogger logDestination = null, string name = null) {
-            this.StandardLog = new ActinStandardLogger(null);
-            setup(logDestination, name);
-        }
-
-        private void setup(IActinLogger logDestination, string name) {
+        private LogDispatcher runtimeLog = new LogDispatcher();
+        
+        //Init ======================= Init:
+        private async Task<ConfigureUtil> init(Action<ConfigureUtil> configure, Func<ActorUtil, Task> startUp) {
+            lock (lockRunning) {
+                if (__running__) {
+                    return null;
+                }
+                __running__ = true;
+            }
             this.AddSingletonDependency(this);
-            userLog = logDestination ?? this.StandardLog;
-            log.AddDestination(userLog);
-            this.AddSingletonDependency(userLog, typeof(IActinLogger));
+
+            //Get configuration from the user:
+            var config = new ConfigureUtil();
+            configure(config);
+            config.Sanitize();
+
+            //Add this director to the static list of running directors:
+            lockDirectors.EnterWriteLock();
+            try {
+                if (directors.ContainsKey(config.DirectorName)) {
+                    throw new ApplicationException($"There is already a running director with the name '{config.DirectorName}'");
+                }
+                directors[config.DirectorName] = this;
+            }
+            finally {
+                lockDirectors.ExitWriteLock();
+            }
+
+            //Get an instance of the start up log, or throw an exception:
+            var log = new LogDispatcherForActor(new LogDispatcher(), "StartUp");
+            Actor startUpLogAsActor;
+            {
+                var startUpLogInstantiator = new ActinInstantiator(config.StartUpLogType);
+                startUpLogInstantiator.Build((t) => {
+                    throw new ApplicationException($"{config.StartUpLogType.Name} is being used as the 'StartUp' Log, and must not have any dependencies.");
+                });
+                lock (lockInstantiators) {
+                    instantiators[config.StartUpLogType] = startUpLogInstantiator;
+                }
+                var startUpLog = startUpLogInstantiator.GetSingletonInstance(this) as IActinLogger;
+                if (startUpLog == null) {
+                    throw new ApplicationException("The 'StartUp' Log must implement IActinLogger.");
+                }
+                startUpLogAsActor = startUpLog as Actor;
+                log.AddDestination(startUpLog);
+
+                if (startUpLog is ActinStandardLogger && !string.IsNullOrWhiteSpace(config.StandardLogOutputFolder)) {
+                    var standardLogger = startUpLog as ActinStandardLogger;
+                    standardLogger.SetLogFolderPath(config.StandardLogOutputFolder);
+                }
+            }
+
+            try {
+                //Do manual user start up:
+                log.Info("Director Initializing");
+                await startUp(new ActorUtil(null) {
+                    Log = log,
+                    Started = DateTimeOffset.Now,
+                });
+
+                //Do automated DI startup:
+                foreach (var a in config.AssembliesToCheckForDI) {
+                    try {
+                        foreach (var t in a.GetTypes()) {
+                            if (t.HasAttribute<SingletonAttribute>() || t.HasAttribute<InstanceAttribute>()) {
+                                lock (lockInstantiators) {
+                                    if (!instantiators.ContainsKey(t)) {
+                                        //If it's already contained, then it was manually added as a Singleton dependency.
+                                        //We can't add it again, as when manually added, a singleton instance was provided.
+                                        instantiators[t] = new ActinInstantiator(t);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex) {
+                        var msg = $"Actin Failed in assembly {a.FullName}. Inner Exception: {ex.Message}";
+                        log.Error(msg, ex);
+                        await runStartUpLog();
+                        throw new Exception(msg, ex);
+                    }
+                }
+
+                lock (lockInstantiators) {
+                    //At this point, we should only have manually added singletons, and attribute marked Singleton or Instance classes.
+                    var rootableInstantiators = instantiators.Values.ToList();
+                    rootableInstantiators = rootableInstantiators.Where(config.RootActorFilter).ToList();
+                    foreach (var instantiator in rootableInstantiators) {
+                        try {
+                            instantiator.Build(t => {
+                                if (!this.instantiators.TryGetValue(t, out var dependencyInstantiator)) {
+                                    dependencyInstantiator = new ActinInstantiator(t);
+                                    this.instantiators[t] = dependencyInstantiator;
+                                }
+                                return dependencyInstantiator;
+                            });
+                        }
+                        catch (Exception ex) {
+                            throw new ApplicationException($"Failed to build rootable type {instantiator.Type.Name}: {ex.Message}", ex);
+                        }
+                    }
+                    foreach (var singletonInstantiator in rootableInstantiators.Where(x => x.IsRootSingleton)) {
+                        var singleton = singletonInstantiator.GetSingletonInstance(this);
+                    }
+                }
+
+                if(!TryGetSingleton(config.RuntimeLogType, out var rtLog)){
+                    throw new ApplicationException($"Actin failed to get a singleton instance of the 'Runtime' log. Ensure you've marked {config.RuntimeLogType.Name} with the Singleton attribute, or manually added it to the Director as a singleton.");
+                }
+                var rtLogAsIActinLogger = rtLog as IActinLogger;
+                if (rtLogAsIActinLogger == null) {
+                    throw new ApplicationException($"{config.RuntimeLogType} must implement IActinLogger, as it is being used as the 'Runtime' Log.");
+                }
+                runtimeLog.AddDestination(rtLogAsIActinLogger);
+
+                return config;
+            }
+            catch (Exception ex) when (logFailedStartup(ex)) {
+                //Exception is always unhandled, this is a nicer way to ensure logging before the exception propagates.
+                return null;
+            }
+
+            bool logFailedStartup(Exception ex) {
+                log.Log(new ActinLog {
+                    Time = DateTimeOffset.Now,
+                    Location = "StartUp",
+                    UserMessage = "Actin failed to start.",
+                    Details = ex?.ToString(),
+                    Type = LogType.Error,
+                });
+                runStartUpLog().Wait();
+                return false;
+            }
+
+            async Task runStartUpLog() {
+                try {
+                    if (startUpLogAsActor != null) {
+                        var disposeHandle = await startUpLogAsActor.Init(() => new DispatchData {
+                            MainLog = new ConsoleLogger(),
+                            Time = DateTimeOffset.Now,
+                        });
+                        if (disposeHandle != null) {
+                            lock (lockDisposeHandles) {
+                                disposeHandles.Add(disposeHandle);
+                            }
+                        }
+                        await startUpLogAsActor.Run(() => new DispatchData {
+                            MainLog = new ConsoleLogger(),
+                            Time = DateTimeOffset.Now,
+                        });
+                    }
+                }
+                catch {
+                    //Nowhere to put this if the log is failing.
+                }
+            }
+
+        }
+
+        //Main Loop ======================= Main Loop:
+        async Task runMainLoop(ConfigureUtil config) {
+            var poolCopy = new List<Actor_SansType>();
+
+            void safeLog(string location, Exception ex) {
+                try {
+                    runtimeLog.Error(location, "Main Loop", ex);
+                }
+                catch { }
+            }
+            runtimeLog.Error("", "DirectorLoopStarted", "");
+            bool readkeyFailed = false;
+            while (Running) {
+                try {
+                    try {
+                        if (!readkeyFailed && Environment.UserInteractive) {
+                            if (Console.KeyAvailable) {
+                                var key = Console.ReadKey(true).Key;
+                                if (key == ConsoleKey.Q || key == ConsoleKey.Escape) {
+                                    this.Dispose();
+                                    await Task.Delay(5000); //Simulate the time we normally get for shutdown.
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex) {
+                        readkeyFailed = true;
+                        safeLog("User Interactive Check", ex);
+                    }
+
+                    try {
+                        poolCopy.Clear();
+                        lock (lockProcessPool) {
+                            poolCopy.AddRange(processPool);
+                        }
+                    }
+                    catch (Exception ex) {
+                        safeLog("Process Pool Copy", ex);
+                    }
+
+                    try {
+                        var shouldRemove = poolCopy.Where(x => x.ShouldBeRemovedFromPool).ToList();
+                        if (shouldRemove.Count > 0) {
+                            lock (lockProcessPool) {
+                                processPool.RemoveAll(x => shouldRemove.Contains(x));
+                                poolCopy.Clear();
+                                poolCopy.AddRange(processPool);
+                            }
+                        }
+                    }
+                    catch (Exception ex) {
+                        safeLog("Process Pool Pruning", ex);
+                    }
+
+                    List<ActorDisposeHandle> handles = null;
+                    lock (lockDisposeHandles) {
+                        handles = disposeHandles;
+                    }
+
+                    try {
+                        var remainingHandles = new List<ActorDisposeHandle>();
+                        if (handles != null) {
+                            foreach (var handle in handles) {
+                                if (handle.MustDispose) {
+#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+                                    handle.DisposeProcess(getCurrentDispatchData);
+#pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+                                }
+                                else {
+                                    remainingHandles.Add(handle);
+                                }
+                            }
+                            lock (lockDisposeHandles) {
+                                if (disposeHandles != null) {
+                                    disposeHandles = remainingHandles;
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex) {
+                        safeLog("Dispose Processes", ex);
+                    }
+
+                    try {
+                        List<object> newDependencies = null;
+                        lock (lockNewlyRegisteredDependencies) {
+                            if (newlyRegisteredDependencies.Count > 0) {
+                                newDependencies = newlyRegisteredDependencies.ToList();
+                                newlyRegisteredDependencies.Clear();
+                            }
+                        }
+                        if (newDependencies != null) {
+                            foreach (var newDependency in newDependencies) {
+                                try {
+                                    if (newDependency is Actor_SansType) {
+                                        var process = newDependency as Actor_SansType;
+#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+                                        process.Init(getCurrentDispatchData).ContinueWith(async task => {
+#pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+                                            if (task.Status == TaskStatus.RanToCompletion) {
+                                                if (task.Result != null) {
+                                                    var handle = task.Result;
+                                                    var mustDisposeNow = false;
+                                                    lock (lockDisposeHandles) {
+                                                        if (disposeHandles != null) {
+                                                            lock (lockProcessPool) {
+                                                                processPool.Add(process);
+                                                            }
+                                                            disposeHandles.Add(handle);
+                                                        }
+                                                        else {
+                                                            //Means that the whole application has been disposed.
+                                                            mustDisposeNow = true;
+                                                        }
+                                                    }
+                                                    if (mustDisposeNow) {
+                                                        await handle.DisposeProcess(getCurrentDispatchData);
+                                                    }
+                                                }
+                                            }
+                                        });
+                                    }
+                                    else if (newDependency is IOnInit) {
+#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+                                        (newDependency as IOnInit).OnInit(new ActorUtil(newDependency as Actor_SansType) {
+#pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+                                            Started = DateTimeOffset.Now,
+                                        });
+                                    }
+                                }
+                                catch (Exception ex) {
+                                    safeLog("Initializing Dependency", ex);
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex) {
+                        safeLog("Initializing Dependencies", ex);
+                    }
+
+                    try {
+                        foreach (var process in poolCopy) {
+                            try {
+                                if (process.ShouldBeRunNow(DateTimeOffset.Now)) {
+#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+                                    process.Run(getCurrentDispatchData);
+#pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+                                }
+                            }
+                            catch (Exception ex) {
+                                safeLog("Running Process", ex);
+                            }
+                        }
+                    }
+                    catch (Exception ex) {
+                        safeLog("Running All Processes", ex);
+                    }
+
+                    await Task.Delay(runLoopDelay);
+                }
+                catch (Exception ex) {
+                    safeLog("main while", ex);
+                }
+            }
+        }
+
+        private bool shuttingDown = false;
+        public void Dispose() {
+            this.runtimeLog?.Error("Shutdown", "DirectorLoopShutdown", "Shutdown");
+            lock (lockRunning) {
+                if (shuttingDown) {
+                    return;
+                }
+                shuttingDown = true;
+                __running__ = false;
+            }
+            List<ActorDisposeHandle> handles = null;
+            lock (lockDisposeHandles) {
+                handles = disposeHandles;
+                disposeHandles = null;
+            }
+
+            foreach (var handle in handles) {
+#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+                handle.DisposeProcess(getCurrentDispatchData);
+#pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+            }
+
+            var singletonPocoInstantiators = new List<ActinInstantiator>();
+            lock (this.lockInstantiators) {
+                foreach (var instantiator in instantiators.Values) {
+                    if (instantiator.IsRootSingleton && !instantiator.IsActor) {
+                        if (instantiator.HasSingletonInstance) {
+                            singletonPocoInstantiators.Add(instantiator);
+                        }
+                    }
+                }
+            }
+
+            foreach (var instantiator in singletonPocoInstantiators) {
+                var instance = instantiator.GetSingletonInstance(this);
+                if (instantiator == null) {
+                    continue;
+                }
+                try {
+                    instantiator.DisposeChildren(instance);
+                }
+                catch (Exception ex) {
+                    this.runtimeLog?.Error("Shutdown", $"{instantiator.Type.Name}.DisposeChildren", ex);
+                }
+                try {
+                    var asDisposable = instance as IDisposable;
+                    asDisposable?.Dispose();
+                }
+                catch (Exception ex) {
+                    this.runtimeLog?.Error("Shutdown", $"{instantiator.Type.Name}.DisposeInstance", ex);
+                }
+            }
 
             lockDirectors.EnterWriteLock();
             try {
-                directors[name ?? ""] = this;
+                var match = directors.FirstOrDefault(x => x.Value == this);
+                if (match.Key != null) {
+                    directors.Remove(match.Key);
+                }
             }
             finally {
                 lockDirectors.ExitWriteLock();
@@ -133,376 +491,13 @@ namespace KC.Actin {
         private DispatchData getCurrentDispatchData() {
             return new DispatchData {
                 Time = SystemTimeOverride.Value ?? DateTimeOffset.Now,
-                MainLog = this.userLog,
+                MainLog = this.runtimeLog,
             };
-        }
-
-        private bool shuttingDown = false;
-        public void Dispose() {
-            this.log?.Error("Shutdown", "DirectorLoopShutdown", "Shutdown");
-            lock (lockRunning) {
-                if (shuttingDown) {
-                    return;
-                }
-                shuttingDown = true;
-                __running__ = false;
-            }
-            List<ActorDisposeHandle> handles = null;
-            lock (lockDisposeHandles) {
-                handles = disposeHandles;
-                disposeHandles = null;
-            }
-
-            foreach (var handle in handles) {
-#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-                handle.DisposeProcess(getCurrentDispatchData);
-#pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-            }
-
-            var singletonPocoInstantiators = new List<ActinInstantiator>();
-            lock (this.lockInstantiators) {
-                foreach (var instantiator in instantiators.Values) {
-                    if (instantiator.IsRootSingleton && !instantiator.IsActor) {
-                        if (instantiator.HasSingletonInstance) {
-                            singletonPocoInstantiators.Add(instantiator);
-                        }
-                    }
-                }
-            }
-
-            foreach (var instantiator in singletonPocoInstantiators) {
-                var instance = instantiator.GetSingletonInstance(this);
-                if (instantiator == null) {
-                    continue;
-                }
-                try {
-                    instantiator.DisposeChildren(instance);
-                }
-                catch (Exception ex) {
-                    this.log?.Error("Shutdown", $"{instantiator.Type.Name}.DisposeChildren", ex);
-                }
-                try {
-                    var asDisposable = instance as IDisposable;
-                    asDisposable?.Dispose();
-                }
-                catch (Exception ex) {
-                    this.log?.Error("Shutdown", $"{instantiator.Type.Name}.DisposeInstance", ex);
-                }
-            }
-
-            lockDirectors.EnterWriteLock();
-            try {
-                var match = directors.FirstOrDefault(x => x.Value == this);
-                if (match.Key != null) {
-                    directors.Remove(match.Key);
-                }
-            }
-            finally {
-                lockDirectors.ExitWriteLock();
-            }
-        }
-
-        public async Task Run(Func<StartupUtil, Task> startUp = null, bool startUp_loopUntilSucceeds = true, params Assembly[] assembliesToCheckForDI) {
-            if (startUp == null) {
-                startUp = async (_) => { await Task.FromResult(0); };
-            }
-            lock (lockRunning) {
-                if (__running__) {
-                    return;
-                }
-                __running__ = true;
-            }
-
-            bool logFailedStartup(Exception ex) {
-                log.Error("StartUp", ex);
-                runLogNow().Wait();
-                return false;
-            }
-
-            var startUtil = new StartupUtil();
-            async Task runLogNow() {
-                try {
-                    //https://github.com/dotnet/csharplang/issues/35
-                    var logActor = userLog as Actor_SansType;
-                    if (logActor != null) {
-                        await logActor.Run(getCurrentDispatchData);
-                    }
-                }
-                catch {
-                    //Nowhere to put this if the log is failing.
-                }
-            }
-
-            try {
-                //Do manual start up:
-                log.Error("StartUp", "DirectorLoopStarting", "Startup");
-                if (!startUp_loopUntilSucceeds) {
-                    await startUp(startUtil);
-                }
-                else {
-                    while (true) {
-                        try {
-                            startUtil.Update(getCurrentDispatchData());
-                            await startUp(startUtil);
-                            break;
-                        }
-                        catch (Exception ex) {
-                            log.Error("Critical Start Failed.", ex);
-                            await runLogNow();
-                            var delayInterval = 100;
-                            var retryInterval = 5000;
-                            for (int ellapsedTime = 0; ellapsedTime < retryInterval; ellapsedTime += delayInterval) {
-                                await Task.Delay(delayInterval);
-                                lock (lockRunning) {
-                                    if (!__running__) {
-                                        return;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                //Do automated DI startup:
-                var assem = assembliesToCheckForDI;
-                if (assem == null || assem.Length == 0) {
-                    assem = new Assembly[] { Assembly.GetEntryAssembly() };
-                }
-
-                foreach (var a in assem) {
-                    try {
-                        foreach (var t in a.GetTypes()) {
-                            if (t.HasAttribute<SingletonAttribute>() || t.HasAttribute<InstanceAttribute>()) {
-                                lock (lockInstantiators) {
-                                    if (!instantiators.ContainsKey(t)) {
-                                        //If it's already contained, then it was manually added as a Singleton dependency.
-                                        //We can't add it again, as when manually added, a singleton instance was provided.
-                                        instantiators[t] = new ActinInstantiator(t);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    catch (Exception ex) {
-                        var msg = $"Actin Failed in assembly {a.FullName}. Inner Exception: {ex.Message}";
-                        startUtil.Log.Error(null, msg, ex);
-                        await runLogNow();
-                        throw new Exception(msg, ex);
-                    }
-                }
-
-                lock (lockInstantiators) {
-                    //At this point, we should only have manually added singletons, and attribute marked Singleton or Instance classes.
-                    var rootableInstantiators = instantiators.Values.ToList();
-                    if (startUtil.rootActorFilter != null) {
-                        rootableInstantiators = rootableInstantiators.Where(startUtil.rootActorFilter).ToList();
-                    }
-                    foreach (var instantiator in rootableInstantiators) {
-                        try {
-                            instantiator.Build(t => {
-                                if (!this.instantiators.TryGetValue(t, out var dependencyInstantiator)) {
-                                    dependencyInstantiator = new ActinInstantiator(t);
-                                    this.instantiators[t] = dependencyInstantiator;
-                                }
-                                return dependencyInstantiator;
-                            });
-                        }
-                        catch (Exception ex) {
-                            throw new ApplicationException($"Failed to build rootable type {instantiator.Type.Name}: {ex.Message}", ex);
-                        }
-                    }
-                    foreach (var singletonInstantiator in rootableInstantiators.Where(x => x.IsRootSingleton)) {
-                        var singleton = singletonInstantiator.GetSingletonInstance(this);
-                    }
-                }
-
-            }
-            catch (Exception ex) when (logFailedStartup(ex)) {
-                //Exception is always unhandled, this is a nicer way to ensure logging before the exception propagates.
-            }
-            await runMainLoop();
         }
 
         internal void RegisterInjectedDependency(object instance) {
             lock (lockNewlyRegisteredDependencies) {
                 newlyRegisteredDependencies.Add(instance);
-            }
-        }
-
-        //Main Loop ======================= Main Loop:
-        async Task runMainLoop() {
-            var poolCopy = new List<Actor_SansType>();
-
-            void printIfDebug(string msg) {
-#if DEBUG
-                if (PrintGraphToDebug) {
-                    Console.WriteLine($"{DateTimeOffset.Now.Second}: {msg}");
-                }
-#endif
-            }
-
-            void safeLog(string location, Exception ex) {
-                try {
-                    log.Error(location, "Main Loop", ex);
-                }
-                catch { }
-            }
-            log.Error("", "DirectorLoopStarted", "");
-            bool readkeyFailed = false;
-            while (Running) {
-                try {
-                    try {
-                        if (!readkeyFailed && Environment.UserInteractive) {
-                            if (Console.KeyAvailable) {
-                                var key = Console.ReadKey(true).Key;
-                                if (key == ConsoleKey.Q || key == ConsoleKey.Escape) {
-                                    this.Dispose();
-                                    await Task.Delay(5000); //Simulate the time we normally get for shutdown.
-                                }
-                            }
-                        }
-                    }
-                    catch (Exception ex) {
-                        readkeyFailed = true;
-                        safeLog("User Interactive Check", ex);
-                    }
-
-                    try {
-                        poolCopy.Clear();
-                        lock (lockProcessPool) {
-                            poolCopy.AddRange(processPool);
-                        }
-                    }
-                    catch (Exception ex) {
-                        safeLog("Process Pool Copy", ex);
-                    }
-
-                    try {
-                        var shouldRemove = poolCopy.Where(x => x.ShouldBeRemovedFromPool).ToList();
-                        if (shouldRemove.Count > 0) {
-                            lock (lockProcessPool) {
-                                processPool.RemoveAll(x => shouldRemove.Contains(x));
-                                poolCopy.Clear();
-                                poolCopy.AddRange(processPool);
-                            }
-                        }
-                    }
-                    catch (Exception ex) {
-                        safeLog("Process Pool Pruning", ex);
-                    }
-
-                    List<ActorDisposeHandle> handles = null;
-                    lock (lockDisposeHandles) {
-                        handles = disposeHandles;
-                    }
-
-                    try {
-                        var remainingHandles = new List<ActorDisposeHandle>();
-                        if (handles != null) {
-                            foreach (var handle in handles) {
-                                if (handle.MustDispose) {
-                                    printIfDebug("dispose-" + handle.ProcessName);
-#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-                                    handle.DisposeProcess(getCurrentDispatchData);
-#pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-                                }
-                                else {
-                                    remainingHandles.Add(handle);
-                                }
-                            }
-                            lock (lockDisposeHandles) {
-                                if (disposeHandles != null) {
-                                    disposeHandles = remainingHandles;
-                                }
-                            }
-                        }
-                    }
-                    catch (Exception ex) {
-                        safeLog("Dispose Processes", ex);
-                    }
-
-                    try {
-                        List<object> newDependencies = null;
-                        lock (lockNewlyRegisteredDependencies) {
-                            if (newlyRegisteredDependencies.Count > 0) {
-                                newDependencies = newlyRegisteredDependencies.ToList();
-                                newlyRegisteredDependencies.Clear();
-                            }
-                        }
-                        if (newDependencies != null) {
-                            foreach (var newDependency in newDependencies) {
-                                try {
-                                    if (newDependency is Actor_SansType) {
-                                        var process = newDependency as Actor_SansType;
-                                        printIfDebug("init-" + process.ActorName);
-#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-                                        process.Init(getCurrentDispatchData).ContinueWith(async task => {
-#pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-                                            if (task.Status == TaskStatus.RanToCompletion) {
-                                                if (task.Result != null) {
-                                                    var handle = task.Result;
-                                                    var mustDisposeNow = false;
-                                                    lock (lockDisposeHandles) {
-                                                        if (disposeHandles != null) {
-                                                            lock (lockProcessPool) {
-                                                                processPool.Add(process);
-                                                            }
-                                                            disposeHandles.Add(handle);
-                                                        }
-                                                        else {
-                                                            //Means that the whole application has been disposed.
-                                                            mustDisposeNow = true;
-                                                        }
-                                                    }
-                                                    if (mustDisposeNow) {
-                                                        await handle.DisposeProcess(getCurrentDispatchData);
-                                                    }
-                                                }
-                                            }
-                                        });
-                                    }
-                                    else if (newDependency is IOnInit) {
-#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-                                        (newDependency as IOnInit).OnInit(new ActorUtil(newDependency as Actor_SansType) {
-#pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-                                            Started = DateTimeOffset.Now,
-                                        });
-                                    }
-                                }
-                                catch (Exception ex) {
-                                    safeLog("Initializing Dependency", ex);
-                                }
-                            }
-                        }
-                    }
-                    catch (Exception ex) {
-                        safeLog("Initializing Dependencies", ex);
-                    }
-
-                    try {
-                        foreach (var process in poolCopy) {
-                            try {
-                                if (process.ShouldBeRunNow(DateTimeOffset.Now)) {
-                                    printIfDebug("run-" + process.ActorName);
-#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-                                    process.Run(getCurrentDispatchData);
-#pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-                                }
-                            }
-                            catch (Exception ex) {
-                                safeLog("Running Process", ex);
-                            }
-                        }
-                    }
-                    catch (Exception ex) {
-                        safeLog("Running All Processes", ex);
-                    }
-
-                    await Task.Delay(runLoopDelay);
-                }
-                catch (Exception ex) {
-                    safeLog("main while", ex);
-                }
             }
         }
 

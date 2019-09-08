@@ -6,9 +6,16 @@ namespace KC.Actin.Logs {
     public class LogDispatcherForActor {
         private LogDispatcher dispatcher;
         private Actor_SansType actor;
+        private string locationOverride;
+
         public LogDispatcherForActor(LogDispatcher dispatcher, Actor_SansType actor) {
             this.dispatcher = dispatcher;
             this.actor = actor;
+        }
+
+        public LogDispatcherForActor(LogDispatcher dispatcher, string locationOverride) {
+            this.dispatcher = dispatcher;
+            this.locationOverride = locationOverride;
         }
 
         public void AddDestination(IActinLogger destination) {
@@ -28,8 +35,9 @@ namespace KC.Actin.Logs {
         }
 
         private void dispatch(string userMessage, string secondaryLocation, string details, LogType type) {
-            var location = secondaryLocation == null ? actor?.ActorName : $"{actor?.ActorName}.{secondaryLocation}";
-            var log = new ActinLog(DateTimeOffset.Now, actor?.IdString, actor.ActorName, userMessage, details, type);
+            var mainLocation = locationOverride ?? actor?.ActorName;
+            var location = secondaryLocation == null ? mainLocation : $"{mainLocation}.{secondaryLocation}";
+            var log = new ActinLog(DateTimeOffset.Now, actor?.IdString, location, userMessage, details, type);
             Log(log);
         }
 
