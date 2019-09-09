@@ -194,6 +194,10 @@ namespace KC.Actin
             Type = type;
         }
 
+        public ActinLog WithNoNulls() {
+            return new ActinLog(Time, Context, Location, UserMessage, Details, Type);
+        }
+
         public override string ToString() {
             return $"{Time} | {Type.ToString()} | Location: {Location ?? ""} | Context: {Context ?? ""} | {UserMessage ?? ""} | {Details ?? ""}";
         }
