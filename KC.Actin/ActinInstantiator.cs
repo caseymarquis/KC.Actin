@@ -38,7 +38,18 @@ namespace KC.Actin {
             }
         }
 
-        internal void Build(Func<Type, ActinInstantiator> getInstantiatorFromType, ImmutableList<ActinInstantiator> lineage = null) {
+        /// <summary>
+        /// Returning false means we refused to build the class because
+        /// it has parents or siblings and therefore MUST have its lineage
+        /// passed in.
+        /// </summary>
+        internal bool Build(Func<Type, ActinInstantiator> getInstantiatorFromType, ImmutableList<ActinInstantiator> lineage = null) {
+            if (lineage == null) {
+                var allAccessors = Ricochet.Util.GetPropsAndFields(this.Type, x => x.IsClass);
+                if (allAccessors.Any(x => x.Markers.Contains(nameof(ParentAttribute)) || x.Markers.Contains(nameof(SiblingAttribute)))) {
+                    return false;
+                }
+            }
             //Check for circular dependencies:
             if (lineage != null) {
                 if (lineage.Any(x => x.Type == this.Type)) {
@@ -132,6 +143,8 @@ namespace KC.Actin {
             foreach (var dep in InstanceDependencies) {
                 dep.Instantiator.Build(getInstantiatorFromType, newLineage);
             }
+
+            return true;
         }
 
         private object CreateNew() {
@@ -263,7 +276,9 @@ namespace KC.Actin {
             get {
                 lock(lockSingleton) return singleton != null;
             }
-        } 
+        }
+
+        public bool WasBuilt => runBefore;
 
         internal object GetSingletonInstance(Director director) {
             lock (lockSingleton) {

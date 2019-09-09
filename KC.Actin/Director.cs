@@ -85,9 +85,11 @@ namespace KC.Actin {
             Actor startUpLogAsActor;
             {
                 var startUpLogInstantiator = new ActinInstantiator(config.StartUpLogType);
-                startUpLogInstantiator.Build((t) => {
+                if (!startUpLogInstantiator.Build((t) => {
                     throw new ApplicationException($"{config.StartUpLogType.Name} is being used as the 'StartUp' Log, and must not have any dependencies.");
-                });
+                })) {
+                    throw new ApplicationException($"{config.StartUpLogType.Name} is being used as the 'StartUp' Log, and must not have any dependencies.");
+                }
                 lock (lockInstantiators) {
                     instantiators[config.StartUpLogType] = startUpLogInstantiator;
                 }
@@ -138,20 +140,34 @@ namespace KC.Actin {
                     //At this point, we should only have manually added singletons, and attribute marked Singleton or Instance classes.
                     var rootableInstantiators = instantiators.Values.ToList();
                     rootableInstantiators = rootableInstantiators.Where(config.RootActorFilter).ToList();
+                    var skipped = new List<ActinInstantiator>();
                     foreach (var instantiator in rootableInstantiators) {
                         try {
-                            instantiator.Build(t => {
+                            var skippedBecauseConcreteLineageRequired = !instantiator.Build(t => {
                                 if (!this.instantiators.TryGetValue(t, out var dependencyInstantiator)) {
                                     dependencyInstantiator = new ActinInstantiator(t);
                                     this.instantiators[t] = dependencyInstantiator;
                                 }
                                 return dependencyInstantiator;
                             });
+                            if (skippedBecauseConcreteLineageRequired) {
+                                skipped.Add(instantiator);
+                            }
                         }
                         catch (Exception ex) {
                             throw new ApplicationException($"Failed to build rootable type {instantiator.Type.Name}: {ex.Message}", ex);
                         }
                     }
+
+                    var skippedAndNeverBuilt = skipped.Where(x => !x.WasBuilt).ToList();
+                    if (skippedAndNeverBuilt.Any()) {
+                        throw new AggregateException(skippedAndNeverBuilt.Select(
+                            x => new ApplicationException($"{x.Type.Name} has a concrete [Parent] or [Sibling], but its parent was not found in the dependency chain."
+                            + "Most likely you forgot to mark the parent class with a [Singleton] or [Instance] attribute."
+                            + "If the Parent is a Scene, or not always available, then you must instead use [FlexibleParent] or [FlexibleSibling]."
+                            + "Note that the flexible attributes do not do type checking on start-up.")));
+                    }
+
                     foreach (var singletonInstantiator in rootableInstantiators.Where(x => x.IsRootSingleton)) {
                         var singleton = singletonInstantiator.GetSingletonInstance(this);
                     }
