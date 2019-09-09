@@ -48,12 +48,13 @@ namespace Test.Actin
             var director = new Director();
             var procManual = new ProcManual();
 #pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-            director.Run(startUp_loopUntilSucceeds: false,configure: async (util) => {
+            director.Run(configure: async (util) => {
                 var nestedTypes = typeof(SingletonTests).GetNestedTypes();
                 util.SetRootActorFilter(x => nestedTypes.Contains(x.Type));
+                util.SetAssembliesToCheckForDependencies(Assembly.GetExecutingAssembly());
                 director.AddSingletonDependency(procManual);
                 await Task.FromResult(0);
-            }, assembliesToCheckForDI: Assembly.GetExecutingAssembly());
+            });
 #pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
 
             await Task.Delay(500);
