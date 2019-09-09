@@ -32,6 +32,7 @@ namespace KC.Actin.Logs {
         }
 
         public void Log(ActinLog log) {
+            log = log.WithNoNulls();
             lockDestinations.EnterReadLock();
             try {
                 foreach (var destination in destinations) {
