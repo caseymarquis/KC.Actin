@@ -11,7 +11,7 @@ namespace Example.Actin
         static void Main(string[] args)
         {
             new Director().Run(config => {
-                config.SetStandardLogOutputFolder("./log");
+                config.Set_StandardLogOutputFolder("./log");
                 //You can also use custom logging.
             }).Wait();
         }

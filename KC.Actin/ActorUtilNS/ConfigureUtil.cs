@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace KC.Actin.ActorUtilNS {
     public class ConfigureUtil {
@@ -15,6 +16,8 @@ namespace KC.Actin.ActorUtilNS {
         internal string DirectorName { get; set; }
         internal Assembly[] AssembliesToCheckForDI { get; set; } = new Assembly[0];
         internal string StandardLogOutputFolder { get; set; }
+        internal Func<ActorUtil, Task> RunBeforeStart { get; set; }
+        internal Func<ActorUtil, Task> RunAfterStart { get; set; }
 
         internal void Sanitize() {
             RootActorFilter = RootActorFilter ?? (_ => true);
@@ -35,6 +38,9 @@ namespace KC.Actin.ActorUtilNS {
                     Assembly.GetEntryAssembly(),
                 };
             }
+
+            RunBeforeStart = RunBeforeStart ?? ((_) => Task.FromResult(0));
+            RunAfterStart = RunAfterStart ?? ((_) => Task.FromResult(0));
         }
 
         /// <summary>
@@ -42,7 +48,7 @@ namespace KC.Actin.ActorUtilNS {
         /// This is useful for testing, where you only want certain
         /// actors started so other Actors don't cause tests to fail.
         /// </summary>
-        public ConfigureUtil SetRootActorFilter(Func<ActinInstantiator, bool> actorShouldBeBuilt) {
+        public ConfigureUtil Set_RootActorFilter(Func<ActinInstantiator, bool> actorShouldBeBuilt) {
             RootActorFilter = actorShouldBeBuilt;
             return this;
         }
@@ -53,7 +59,7 @@ namespace KC.Actin.ActorUtilNS {
         /// A Singleton with this type will be created. This Singleton
         /// can be injected into other Actors like any other Singleton.
         /// </summary>
-        public ConfigureUtil SetStartUpLog<T>() where T : IActinLogger {
+        public ConfigureUtil Set_StartUpLog<T>() where T : IActinLogger {
             if (StartUpLogType == null) {
                 StartUpLogType = typeof(T);
             }
@@ -67,7 +73,7 @@ namespace KC.Actin.ActorUtilNS {
         /// A Singleton with this type will be created. This Singleton
         /// can be injected into other Actors like any other Singleton.
         /// </summary>
-        public ConfigureUtil SetRuntimeLog<T>() where T : IActinLogger {
+        public ConfigureUtil Set_RuntimeLog<T>() where T : IActinLogger {
             RuntimeLogType = typeof(T);
             return this;
         }
@@ -77,7 +83,7 @@ namespace KC.Actin.ActorUtilNS {
         /// Otherwise, Actin will check the assemblies specified. Used for
         /// testing, or when you've broken things up into multiple projects.
         /// </summary>
-        public ConfigureUtil SetAssembliesToCheckForDependencies(params Assembly[] assembliesToCheckForDi) {
+        public ConfigureUtil Set_AssembliesToCheckForDependencies(params Assembly[] assembliesToCheckForDi) {
             AssembliesToCheckForDI = assembliesToCheckForDi;
             return this;
         }
@@ -88,13 +94,37 @@ namespace KC.Actin.ActorUtilNS {
         /// you can specify a name to help identify them.
         /// </summary>
         /// <returns></returns>
-        public ConfigureUtil SetDirectorName(string name) {
+        public ConfigureUtil Set_DirectorName(string name) {
             DirectorName = name;
             return this;
         }
 
-        public ConfigureUtil SetStandardLogOutputFolder(string path) {
+        /// <summary>
+        /// If the standard log is used (because another log was not specified),
+        /// you can specify a folder where daily XML logs will be stored.
+        /// </summary>
+        public ConfigureUtil Set_StandardLogOutputFolder(string path) {
             StandardLogOutputFolder = path;
+            return this;
+        }
+
+        /// <summary>
+        /// This function will be run before dependencies are resolved,
+        /// but after the StartUp log has been created.
+        /// Note that exceptions thrown here will bubble upward.
+        /// </summary>
+        public ConfigureUtil Run_BeforeStart(Func<ActorUtil, Task> runBeforeStart) {
+            this.RunBeforeStart = runBeforeStart;
+            return this;
+        }
+
+        /// <summary>
+        /// This function will be run after dependencies are resolved,
+        /// but before the main run loop starts and Actors are initialized.
+        /// Note that exceptions thrown here will bubble upward.
+        /// </summary>
+        public ConfigureUtil Run_AfterStart(Func<ActorUtil, Task> runAfterStart) {
+            this.RunAfterStart = runAfterStart;
             return this;
         }
     }

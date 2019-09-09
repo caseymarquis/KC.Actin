@@ -161,8 +161,8 @@ namespace Test.Actin {
 #pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
             director.Run(configure: async (util) => {
                 var nestedTypes = typeof(FlexibleSiblingTests).GetNestedTypes();
-                util.SetRootActorFilter(x => nestedTypes.Contains(x.Type));
-                util.SetAssembliesToCheckForDependencies(Assembly.GetExecutingAssembly());
+                util.Set_RootActorFilter(x => nestedTypes.Contains(x.Type));
+                util.Set_AssembliesToCheckForDependencies(Assembly.GetExecutingAssembly());
                 await Task.FromResult(0);
             });
 #pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed

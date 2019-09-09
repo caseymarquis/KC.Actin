@@ -46,15 +46,15 @@ namespace KC.Actin {
         private object lockNewlyRegisteredDependencies = new object();
         private List<object> newlyRegisteredDependencies = new List<object>();
 
-        public async Task Run(Action<ConfigureUtil> configure = null, Func<ActorUtil, Task> startUp = null) {
-            var config = await this.init(configure ?? (_ => { }), startUp ?? (_ => Task.FromResult(0)));
+        public async Task Run(Action<ConfigureUtil> configure = null) {
+            var config = await this.init(configure ?? (_ => { }));
             await runMainLoop(config);
         }
 
         private LogDispatcher runtimeLog = new LogDispatcher();
-        
+
         //Init ======================= Init:
-        private async Task<ConfigureUtil> init(Action<ConfigureUtil> configure, Func<ActorUtil, Task> startUp) {
+        private async Task<ConfigureUtil> init(Action<ConfigureUtil> configure) {
             lock (lockRunning) {
                 if (__running__) {
                     return null;
@@ -81,7 +81,7 @@ namespace KC.Actin {
             }
 
             //Get an instance of the start up log, or throw an exception:
-            var log = new LogDispatcherForActor(new LogDispatcher(), "StartUp");
+            var log = new LogDispatcherForActor(new LogDispatcher(), "Before Start");
             Actor startUpLogAsActor;
             {
                 var startUpLogInstantiator = new ActinInstantiator(config.StartUpLogType);
@@ -107,11 +107,10 @@ namespace KC.Actin {
             try {
                 //Do manual user start up:
                 log.Info("Director Initializing");
-                await startUp(new ActorUtil(null) {
+                await config.RunBeforeStart(new ActorUtil(null) {
                     Log = log,
                     Started = DateTimeOffset.Now,
                 });
-
                 //Do automated DI startup:
                 foreach (var a in config.AssembliesToCheckForDI) {
                     try {
@@ -158,15 +157,19 @@ namespace KC.Actin {
                     }
                 }
 
-                if(!TryGetSingleton(config.RuntimeLogType, out var rtLog)){
+                if (!TryGetSingleton(config.RuntimeLogType, out var rtLog)) {
                     throw new ApplicationException($"Actin failed to get a singleton instance of the 'Runtime' log. Ensure you've marked {config.RuntimeLogType.Name} with the Singleton attribute, or manually added it to the Director as a singleton.");
                 }
                 var rtLogAsIActinLogger = rtLog as IActinLogger;
                 if (rtLogAsIActinLogger == null) {
                     throw new ApplicationException($"{config.RuntimeLogType} must implement IActinLogger, as it is being used as the 'Runtime' Log.");
                 }
-                runtimeLog.AddDestination(rtLogAsIActinLogger);
 
+                runtimeLog.AddDestination(rtLogAsIActinLogger);
+                await config.RunAfterStart(new ActorUtil(null) {
+                    Log = new LogDispatcherForActor(runtimeLog, "After Start"),
+                    Started = DateTimeOffset.UtcNow,
+                });
                 return config;
             }
             catch (Exception ex) when (logFailedStartup(ex)) {

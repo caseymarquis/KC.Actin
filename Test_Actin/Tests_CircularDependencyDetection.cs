@@ -32,8 +32,8 @@ namespace Test.Actin
             await Assert.ThrowsAsync<ApplicationException>(async () => {
                 await director.Run(configure: async (util) => {
                     var nestedTypes = typeof(Tests_CircularDependencyDetection).GetNestedTypes();
-                    util.SetRootActorFilter(x => nestedTypes.Contains(x.Type));
-                    util.SetAssembliesToCheckForDependencies(Assembly.GetExecutingAssembly());
+                    util.Set_RootActorFilter(x => nestedTypes.Contains(x.Type));
+                    util.Set_AssembliesToCheckForDependencies(Assembly.GetExecutingAssembly());
                     await Task.FromResult(0);
                 });
             });
