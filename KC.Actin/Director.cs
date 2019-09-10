@@ -586,35 +586,54 @@ namespace KC.Actin {
         /// but which Actin's dependency injection is still used on. For example, this is used on MVC
         /// controllers marked with [Instance] to resolve dependencies marked with [Instance] or [Singleton].
         /// </summary>
-        public void WithExternal_ResolveDependencies(object obj) {
+        public void WithExternal_ResolveDependencies<T>(T obj) {
             if (obj == null) {
                 return;
             }
-            var type = obj.GetType();
-            ActinInstantiator inst;
-            lock (lockInstantiators) {
-                if (!this.instantiators.TryGetValue(type, out inst)) {
-                    return;
-                }
-            }
+            var inst = getOrCreateExternalInstantiator(typeof(T));
             inst.ResolveDependencies(obj, DependencyType.Instance, null, null, this);
         }
 
         /// <summary>
         /// Used to dispose child dependencies created on an object using WithExternal_ResolveDependencies().
         /// </summary>
-        public void WithExternal_DisposeChildren(object obj) {
+        public void WithExternal_DisposeChildren<T>(T obj) {
             if (obj == null) {
                 return;
             }
-            var type = obj.GetType();
+            var inst = getOrCreateExternalInstantiator(typeof(T));
+            inst.DisposeChildren(obj);
+        }
+
+        private ActinInstantiator getOrCreateExternalInstantiator(Type type) {
+            if (!this.Running) {
+                throw new AccessViolationException("The director has not yet started running.");
+            }
+            var success = false;
             ActinInstantiator inst;
             lock (lockInstantiators) {
-                if (!this.instantiators.TryGetValue(type, out inst)) {
-                    return;
+                this.instantiators.TryGetValue(type, out inst);
+            }
+            if (!success) {
+                inst = new ActinInstantiator(type);
+                lock (lockInstantiators) {
+                    //It's better to lock for the whole creation process, as this ensures all internal instantiator
+                    //state is also locked. This only happens when a new type is discovered, so it shouldn't
+                    //cause too much delay in exchange for that safety.
+                    var skippedBecauseConcreteLineageRequired = !inst.Build(t => {
+                            if (!this.instantiators.TryGetValue(t, out var dependencyInstantiator)) {
+                                dependencyInstantiator = new ActinInstantiator(t);
+                                this.instantiators[t] = dependencyInstantiator;
+                            }
+                            return dependencyInstantiator;
+                    });
+                    if (skippedBecauseConcreteLineageRequired) {
+                        throw new ApplicationException($"{type.Name} must remove the [Parent] or [Sibling] attribute. Top level external objects may not have Parents or Siblings injected.");
+                    }
+                    instantiators[type] = inst;
                 }
             }
-            inst.DisposeChildren(obj);
+            return inst;
         }
 
     }
