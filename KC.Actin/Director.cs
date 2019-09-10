@@ -590,7 +590,7 @@ namespace KC.Actin {
             if (obj == null) {
                 return;
             }
-            var inst = getOrCreateExternalInstantiator(typeof(T));
+            var inst = getOrCreateExternalInstantiator(obj.GetType());
             inst.ResolveDependencies(obj, DependencyType.Instance, null, null, this);
         }
 
@@ -601,7 +601,7 @@ namespace KC.Actin {
             if (obj == null) {
                 return;
             }
-            var inst = getOrCreateExternalInstantiator(typeof(T));
+            var inst = getOrCreateExternalInstantiator(obj.GetType());
             inst.DisposeChildren(obj);
         }
 
