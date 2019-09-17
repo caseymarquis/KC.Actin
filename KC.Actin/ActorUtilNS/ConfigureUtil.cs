@@ -18,11 +18,15 @@ namespace KC.Actin.ActorUtilNS {
         internal string StandardLogOutputFolder { get; set; }
         internal Func<ActorUtil, Task> RunBeforeStart { get; set; }
         internal Func<ActorUtil, Task> RunAfterStart { get; set; }
+        internal int RunLoopIntervalMs { get; set; }
 
         internal void Sanitize() {
             RootActorFilter = RootActorFilter ?? (_ => true);
             StartUpLogType = StartUpLogType ?? typeof(ActinStandardLogger);
             RuntimeLogType = RuntimeLogType ?? typeof(ActinStandardLogger);
+            if (RunLoopIntervalMs <= 0) {
+                RunLoopIntervalMs = 10;
+            }
 
             if (DirectorName == null) {
                 lock (lockLastDirectorName) {
@@ -109,6 +113,16 @@ namespace KC.Actin.ActorUtilNS {
         }
 
         /// <summary>
+        /// This is the minimum interval between actors running.
+        /// It's effectively the amount of time Actin spends in a Task.Delay
+        /// before polling all Actors again and seeing if they should be run.
+        /// </summary>
+        public ConfigureUtil Set_RunLoopInterval(int intervalMs) {
+            this.RunLoopIntervalMs = intervalMs;
+            return this;
+        }
+
+        /// <summary>
         /// This function will be run before dependencies are resolved,
         /// but after the StartUp log has been created.
         /// Note that exceptions thrown here will bubble upward.
@@ -127,5 +141,6 @@ namespace KC.Actin.ActorUtilNS {
             this.RunAfterStart = runAfterStart;
             return this;
         }
+
     }
 }

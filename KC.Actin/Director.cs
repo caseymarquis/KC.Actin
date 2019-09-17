@@ -13,9 +13,6 @@ namespace KC.Actin {
         private bool __running__ = false;
         private object lockRunning = new object();
 
-        //TODO: make configurable
-        private TimeSpan runLoopDelay = new TimeSpan(0, 0, 0, 0, 10);
-
         private object lockProcessPool = new object();
         private List<Actor_SansType> processPool = new List<Actor_SansType>();
 
@@ -388,7 +385,7 @@ namespace KC.Actin {
                         safeLog("Running All Processes", ex);
                     }
 
-                    await Task.Delay(runLoopDelay);
+                    await Task.Delay(new TimeSpan(config.RunLoopIntervalMs));
                 }
                 catch (Exception ex) {
                     safeLog("main while", ex);
