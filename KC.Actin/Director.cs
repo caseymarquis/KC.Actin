@@ -237,7 +237,7 @@ namespace KC.Actin {
                 }
                 catch { }
             }
-            runtimeLog.Error("", "DirectorLoopStarted", "");
+            runtimeLog.Info("DirectorLoopStarted");
             bool readkeyFailed = false;
             while (Running) {
                 try {
@@ -395,7 +395,7 @@ namespace KC.Actin {
 
         private bool shuttingDown = false;
         public void Dispose() {
-            this.runtimeLog?.Error("Shutdown", "DirectorLoopShutdown", "Shutdown");
+            runtimeLog?.Info("DirectorLoopShutdown");
             lock (lockRunning) {
                 if (shuttingDown) {
                     return;
