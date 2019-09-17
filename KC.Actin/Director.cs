@@ -385,7 +385,7 @@ namespace KC.Actin {
                         safeLog("Running All Processes", ex);
                     }
 
-                    await Task.Delay(new TimeSpan(config.RunLoopIntervalMs));
+                    await Task.Delay(new TimeSpan(0, 0, 0, 0, config.RunLoopIntervalMs));
                 }
                 catch (Exception ex) {
                     safeLog("main while", ex);
