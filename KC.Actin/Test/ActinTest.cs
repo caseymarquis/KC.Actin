@@ -11,7 +11,7 @@ namespace KC.Actin {
         object lockSingletons = new object();
         Dictionary<Type, object> singletons = new Dictionary<Type, object>();
 
-        public T GetActor<T>() {
+        private async Task<T> GetActorInternal<T>(bool initialize) where T : Actor_SansType {
             var isSingleton = typeof(T).HasAttribute<SingletonAttribute>();
             if (isSingleton) {
                 lock (lockSingletons) {
@@ -52,7 +52,18 @@ namespace KC.Actin {
                 }
             }
 
+            if (initialize) {
+                await this.InitActor((Actor_SansType)instance);
+            }
             return (T)instance;
+        }
+
+        public T GetActor<T>() where T : Actor_SansType {
+            return this.GetActorInternal<T>(initialize: false).Result;
+        }
+
+        public async Task<T> GetInitializedActor<T>() where T : Actor_SansType {
+            return await this.GetActorInternal<T>(initialize: true);
         }
 
         public async Task InitActor(Actor_SansType actor, DateTimeOffset? time = null, bool throwErrors = true) {
