@@ -11,6 +11,10 @@ using System.Threading.Tasks;
 
 namespace KC.Actin {
     public class ActorUtil {
+
+        public static ActorUtil Empty => new ActorUtil(null) {
+        };
+
         public ActorUtil(Actor_SansType _actor) {
             this.actor = _actor;
             this.Log = new LogDispatcherForActor(new LogDispatcher(), _actor);

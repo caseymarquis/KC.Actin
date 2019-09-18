@@ -168,7 +168,7 @@ namespace KC.Actin {
             }
         }
 
-        public async Task<ActorDisposeHandle> Init(Func<DispatchData> getDispatchData) {
+        public async Task<ActorDisposeHandle> Init(Func<DispatchData> getDispatchData, bool throwErrors = false) {
             lock (lockEverything) {
                 if (this.initStarted) {
                     return null;
@@ -186,7 +186,7 @@ namespace KC.Actin {
                         this.initSuccessful = true;
                     }
                 }
-                catch (Exception ex) {
+                catch (Exception ex) when(!throwErrors) {
                     lock (lockEverything) {
                         this.initSuccessful = false;
                     }
@@ -209,7 +209,7 @@ namespace KC.Actin {
         }
 
         private Stopwatch watch = new Stopwatch();
-        public async Task Run(Func<DispatchData> getDispatchData) {
+        public async Task Run(Func<DispatchData> getDispatchData, bool throwErrors = false) {
             lock (lockEverything) {
                 isRunning = true;
                 watch.Restart();
@@ -220,7 +220,7 @@ namespace KC.Actin {
                     updateUtilFromDispatchData(getDispatchData());
                     await OnRun(util);
                 }
-                catch (Exception ex) {
+                catch (Exception ex) when(!throwErrors) {
                     util.Log.Error(this.ActorName, "EventLoop.OnRun()", ex);
                 }
                 finally {
@@ -248,7 +248,10 @@ namespace KC.Actin {
             }
         }
 
-        private async Task ActuallyDispose(Func<DispatchData> getDispatchData) {
+        /// <summary>
+        /// For testing use only.
+        /// </summary>
+        internal async Task ActuallyDispose(Func<DispatchData> getDispatchData, bool throwErrors = false) {
             lock (lockEverything) {
                 if (disposing) {
                     return;
@@ -260,13 +263,13 @@ namespace KC.Actin {
                 try {
                     this.Instantiator?.DisposeChildren(this);
                 }
-                catch (Exception ex) {
+                catch (Exception ex) when(!throwErrors) {
                     util.Log.Error("OnDispose_Children()", this.ActorName, ex);
                 }
                 try {
                     await OnDispose(util);
                 }
-                catch (Exception ex) {
+                catch (Exception ex) when(!throwErrors) {
                     util.Log.Error("OnDispose_Self()", this.ActorName, ex);
                 }
             }

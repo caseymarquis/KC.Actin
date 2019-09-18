@@ -8,16 +8,16 @@ namespace KC.Actin
 {
     public class ActorDisposeHandle
     {
-        Func<Func<DispatchData>, Task> actuallyDisposeProcess;
+        Func<Func<DispatchData>, bool, Task> actuallyDisposeProcess;
         private Actor_SansType process; //This is really just here for debugging. It's not used for anything.
 
-        public ActorDisposeHandle(Func<Func<DispatchData>, Task> _actuallyDisposeProcess, Actor_SansType _process) {
+        public ActorDisposeHandle(Func<Func<DispatchData>, bool, Task> _actuallyDisposeProcess, Actor_SansType _process) {
             this.actuallyDisposeProcess = _actuallyDisposeProcess;
             this.process = _process;
         }
 
         public async Task DisposeProcess(Func<DispatchData> getDispatchData) {
-            await actuallyDisposeProcess(getDispatchData);
+            await actuallyDisposeProcess(getDispatchData, false);
         }
 
         private object lockEverything = new object();
