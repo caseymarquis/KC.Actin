@@ -12,7 +12,7 @@ namespace KC.Actin {
     public abstract class Scene<TActor> : Scene<TActor, Role, int, Role, int> where TActor : Actor {
         public Scene() { }
     }
-    
+
     public abstract class Scene<TActor, TActorRole, TActorRoleId> : Scene<TActor, TActorRole, TActorRoleId, Role, int>
         where TActorRole : Role<TActorRoleId> where TActor : Actor<TActorRole, TActorRoleId> {
         public Scene() { }
@@ -102,7 +102,10 @@ namespace KC.Actin {
             //or which have specified types which do not match.
             var toDispose = new List<TActor>();
             foreach (var pair in copyOfMyActors) {
-                if (uniqueActiveRoles.TryGetValue(pair.Key, out var matchingRole)) {
+                if (pair.Value.Disposing) {
+                    toDispose.Add(pair.Value);
+                }
+                else if (uniqueActiveRoles.TryGetValue(pair.Key, out var matchingRole)) {
                     if (matchingRole.Type != pair.Value.SceneRoleType) {
                         toDispose.Add(pair.Value);
                     }

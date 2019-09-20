@@ -163,7 +163,7 @@ namespace KC.Actin {
         public bool Disposing {
             get {
                 lock (lockEverything) {
-                    return this.disposing;
+                    return this.disposeScheduled;
                 }
             }
         }
@@ -238,9 +238,11 @@ namespace KC.Actin {
 
 
         private bool disposing = false;
+        private bool disposeScheduled = false;
         private ActorDisposeHandle disposeHandle;
         public void Dispose() {
             lock (lockEverything) {
+                disposeScheduled = true;
                 if (this.disposeHandle != null) {
                     this.disposeHandle.MustDispose = true;
                     this.disposeHandle = null;
@@ -257,6 +259,7 @@ namespace KC.Actin {
                     return;
                 }
                 disposing = true;
+                disposeScheduled = true;
             }
 
             async Task disposeThings(ActorUtil util) {
