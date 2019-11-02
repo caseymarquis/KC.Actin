@@ -49,6 +49,7 @@ namespace KC.Actin {
         }
 
         private LogDispatcher runtimeLog = new LogDispatcher();
+        public LogDispatcher Log => runtimeLog;
 
         //Init ======================= Init:
         private async Task<ConfigureUtil> init(Action<ConfigureUtil> configure) {
