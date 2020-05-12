@@ -29,6 +29,8 @@ namespace Test.Actin
             }
         }
 
+        public class ManuallyAddedRootSingletonPoco { }
+
         [Singleton]
         public class ProcDI : Actor {
             [Singleton]
@@ -62,6 +64,29 @@ namespace Test.Actin
             Assert.True(procManual.DiRan.Any(), "DI added process did not run within 250ms.");
             Assert.True(procManual.AutoPoco != null, "Manually added process did not have dependency Poco instantiated.");
             Assert.Null(procManual.ManualPocoLeaveNull);
+        }
+
+        [Fact]
+        public async Task TestManualSingleton() {
+            var director = new Director();
+#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+            director.Run(configure: async (util) => {
+                var nestedTypes = typeof(SingletonTests).GetNestedTypes();
+                util.Set_RootActorFilter(x => nestedTypes.Contains(x.Type));
+                util.Set_AssembliesToCheckForDependencies(Assembly.GetExecutingAssembly());
+                await Task.FromResult(0);
+            });
+#pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+
+            await Task.Delay(500);
+            var pocoManual = new ManuallyAddedRootSingletonPoco();
+            director.AddSingletonDependency(pocoManual);
+
+            if(!director.TryGetSingleton<ManuallyAddedRootSingletonPoco>(out var instance)){
+                Assert.True(false, "TryGetSingleton return false, even though the singleton was previously added.");
+            }
+            Assert.NotNull(instance);
+            Assert.Same(pocoManual, instance);
         }
     }
 }

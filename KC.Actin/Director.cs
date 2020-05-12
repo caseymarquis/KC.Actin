@@ -525,7 +525,7 @@ namespace KC.Actin {
                         singleton = null;
                         return false;
                     }
-                    if (!instantiator.HasSingletonInstance) {
+                    if (!(instantiator.HasSingletonInstance || instantiator.IsRootSingleton)) {
                         singleton = null;
                         return false;
                     }
