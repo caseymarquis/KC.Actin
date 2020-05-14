@@ -33,26 +33,26 @@ namespace KC.Actin
         private Queue<ActinLog> realTimeCache = new Queue<ActinLog>();
         private int maxRealTimeLogs = 1000;
 
-        public bool TodaysLogExists {
-            get { return getTodaysLogFile()?.Exists ?? false; }
+        public bool TodaysLogExists(DateTimeOffset? time = null) {
+            return getTodaysLogFile(time)?.Exists ?? false;
         }
 
         protected async override Task OnInit(ActorUtil util) {
             await Task.FromResult(0);
         }
 
-        private FileInfo getTodaysLogFile() {
+        private FileInfo getTodaysLogFile(DateTimeOffset? today = null) {
             var path = this.logFolderPath.Value;
             if (path == null) {
                 return null;
             }
-            var fileName = DateTimeOffset.Now.ToString("yyyy-MM-dd") + ".xml";
+            var fileName = (today ?? DateTimeOffset.Now).ToString("yyyy-MM-dd") + ".xml";
             var fileInfo = new FileInfo(Path.Combine(path, fileName));
             return fileInfo;
         }
 
-        public void DeleteTodaysLog() {
-            var info = this.getTodaysLogFile();
+        public void DeleteTodaysLog(DateTimeOffset? today = null) {
+            var info = this.getTodaysLogFile(today);
             if (info != null && info.Exists) {
                 info.Delete();
             }
@@ -89,7 +89,7 @@ namespace KC.Actin
                 queuedLogs.Clear();
             }
 
-            var fileInfo = getTodaysLogFile();
+            var fileInfo = getTodaysLogFile(util.Started);
             if (fileInfo == null) {
                 return;
             }
@@ -144,13 +144,14 @@ namespace KC.Actin
                     sb.Append("\" context=\"");
                     sb.Append(getEscaped(log.Context));
                     sb.AppendLine("\">");
-                    sb.Append("  ");
                     if (!string.IsNullOrEmpty(log.UserMessage)) {
+                        sb.Append("  ");
                         sb.AppendLine(getEscaped(log.UserMessage));
-                        sb.AppendLine();
-                        sb.AppendLine();
                     }
-                    sb.AppendLine(getEscaped(log.Details));
+                    if (!string.IsNullOrEmpty(log.Details)) {
+                        sb.Append("  ");
+                        sb.AppendLine(getEscaped(log.Details));
+                    }
                     sb.AppendLine("</Log>");
                     if (sb.Length > 10000) {
                         await writeToDisk();
@@ -161,7 +162,7 @@ namespace KC.Actin
             }
         }
 
-        internal void SetLogFolderPath(string standardLogOutputFolder) {
+        public void SetLogFolderPath(string standardLogOutputFolder) {
             this.logFolderPath.Value = standardLogOutputFolder;
         }
 
