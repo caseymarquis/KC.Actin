@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 
 namespace KC.Actin {
@@ -23,6 +24,12 @@ namespace KC.Actin {
         public bool Any() {
             lock (lockList) {
                 return list.Count > 0;
+            }
+        }
+
+        public bool Any(Func<T, bool> predicate) {
+            lock (lockList) {
+                return list.Any(predicate);
             }
         }
 
