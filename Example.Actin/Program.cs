@@ -1,6 +1,7 @@
 ﻿using KC.Actin;
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -37,14 +38,15 @@ namespace Example.Actin
         /// Since WidgetInfo is public, and all Actors may be running in separate threads, this locking ensures
         /// we don't have any multithreading issues when other Actors access WidgetInfo.
         /// </summary>
-        Atom<IEnumerable<WidgetConfig>> m_WidgetInfo = new Atom<IEnumerable<WidgetConfig>>(new List<WidgetConfig>());
-        public IEnumerable<WidgetConfig> WidgetInfo => m_WidgetInfo.Value;
+        Atom<ImmutableList<WidgetConfig>> m_WidgetInfo = new Atom<ImmutableList<WidgetConfig>>(ImmutableList<WidgetConfig>.Empty);
+        public ImmutableList<WidgetConfig> WidgetInfo => m_WidgetInfo.Value;
 
         protected override async Task OnRun(ActorUtil util) {
-            m_WidgetInfo.Value = new List<WidgetConfig> {
+            //In reality, this would be updated from a database or config file:
+            m_WidgetInfo.Value = new WidgetConfig[] {
                 new WidgetConfig { Id = 1, Name = "Widget One", Type = "TYPE1" }, 
                 new WidgetConfig { Id = 2, Name = "Widget Two", Type = "TYPE2" }, 
-            };
+            }.ToImmutableList();
         }
     }
 
@@ -149,7 +151,6 @@ namespace Example.Actin
 
     [Singleton]
     class PushWidgetDataToTheDatabase : Actor {
-
         /// <summary>
         /// A message queue is a just simple wrapper around a list.
         /// It allows for concurrent operations, and provides some utility
@@ -171,7 +172,7 @@ namespace Example.Actin
         }
 
         protected override async Task OnRun(ActorUtil util) {
-            if (DataToPush.TryDequeue(out var widgetData)) {
+            while (DataToPush.TryDequeue(out var widgetData)) {
                 Console.WriteLine($"SENT TO DATABASE: '{widgetData}'");
             }
         }
