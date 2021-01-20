@@ -67,32 +67,23 @@ namespace KC.Actin {
         }
 
         public async Task InitActor(Actor_SansType actor, DateTimeOffset? time = null, bool throwErrors = true) {
-            if (time == null) {
-                time = DateTimeOffset.Now;
-            }
             await actor.Init(() => new ActorUtilNS.DispatchData {
-                 MainLog = new EmptyLog(),
-                 Time = time.Value,
+                MainLog = new EmptyLog(),
+                Time = time ?? DateTimeOffset.Now,
             }, throwErrors);
         }
 
         public async Task RunActor(Actor_SansType actor, DateTimeOffset? time = null, bool throwErrors = true) {
-            if (time == null) {
-                time = DateTimeOffset.Now;
-            }
             await actor.Run(() => new ActorUtilNS.DispatchData {
                 MainLog = new EmptyLog(),
-                Time = time.Value,
+                Time = time ?? DateTimeOffset.Now,
             }, throwErrors);
         }
 
         public async Task DisposeActor(Actor_SansType actor, DateTimeOffset? time = null, bool throwErrors = true) {
-            if (time == null) {
-                time = DateTimeOffset.Now;
-            }
             await actor.ActuallyDispose(() => new ActorUtilNS.DispatchData {
                 MainLog = new EmptyLog(),
-                Time = time.Value,
+                Time = time ?? DateTimeOffset.Now,
             }, throwErrors);
         }
     }
