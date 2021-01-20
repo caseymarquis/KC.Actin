@@ -619,11 +619,11 @@ namespace KC.Actin {
                     //state is also locked. This only happens when a new type is discovered, so it shouldn't
                     //cause too much delay in exchange for that safety.
                     var skippedBecauseConcreteLineageRequired = !inst.Build(t => {
-                            if (!this.instantiators.TryGetValue(t, out var dependencyInstantiator)) {
-                                dependencyInstantiator = new ActinInstantiator(t);
-                                this.instantiators[t] = dependencyInstantiator;
-                            }
-                            return dependencyInstantiator;
+                        if (!this.instantiators.TryGetValue(t, out var dependencyInstantiator)) {
+                            dependencyInstantiator = new ActinInstantiator(t);
+                            this.instantiators[t] = dependencyInstantiator;
+                        }
+                        return dependencyInstantiator;
                     });
                     if (skippedBecauseConcreteLineageRequired) {
                         throw new ApplicationException($"{type.Name} must remove the [Parent] or [Sibling] attribute. Top level external objects may not have Parents or Siblings injected.");
