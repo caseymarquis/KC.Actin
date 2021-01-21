@@ -31,7 +31,7 @@ namespace Test.Actin {
                     "</Logs>"
                 };
 
-                Assert.Equal(logFileLines.Length, expectedOutput.Length);
+                Assert.Equal(expectedOutput.Length, logFileLines.Length);
                 for (int i = 0; i < logFileLines.Length; i++) {
                     Assert.Equal(expectedOutput[i], logFileLines[i]);
                 }
