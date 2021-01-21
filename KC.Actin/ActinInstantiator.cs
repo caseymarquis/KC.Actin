@@ -158,6 +158,7 @@ namespace KC.Actin {
             var asActor = instance as Actor_SansType;
             if (asActor != null) {
                 asActor.Instantiator = this; //Used for automatically disposing child dependencies.
+                asActor.Util = new ActorUtil(asActor, director.Clock);
             }
             Func<AccessorInstantiatorPair, bool> notSet = (x) => x.Accessor.GetVal(instance) == null;
             //Set and Resolve Singletons:

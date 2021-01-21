@@ -16,9 +16,6 @@ namespace KC.Actin {
         private object lockProcessPool = new object();
         private List<Actor_SansType> processPool = new List<Actor_SansType>();
 
-        [RicochetIgnore]
-        public readonly Atom<DateTimeOffset?> SystemTimeOverride = new Atom<DateTimeOffset?>();
-
         private static ReaderWriterLockSlim lockDirectors = new ReaderWriterLockSlim();
         private static Dictionary<string, Director> directors = new Dictionary<string, Director>();
         /// <summary>
@@ -34,6 +31,8 @@ namespace KC.Actin {
             }
         }
 
+        public readonly ActinClock Clock = new ActinClock();
+
         private object lockDisposeHandles = new object();
         private List<ActorDisposeHandle> disposeHandles = new List<ActorDisposeHandle>();
 
@@ -48,11 +47,12 @@ namespace KC.Actin {
             await runMainLoop(config);
         }
 
-        private LogDispatcher runtimeLog = new LogDispatcher();
+        private LogDispatcher runtimeLog; //Set in init
         public LogDispatcher Log => runtimeLog;
 
         //Init ======================= Init:
         private async Task<ConfigureUtil> init(Action<ConfigureUtil> configure) {
+            this.runtimeLog = new LogDispatcher(this.Clock);
             lock (lockRunning) {
                 if (__running__) {
                     return null;
@@ -79,7 +79,7 @@ namespace KC.Actin {
             }
 
             //Get an instance of the start up log, or throw an exception:
-            var log = new LogDispatcherForActor(new LogDispatcher(), "Before Start");
+            var log = new LogDispatcherForActor(new LogDispatcher(this.Clock), "Before Start");
             Actor startUpLogAsActor;
             {
                 var startUpLogInstantiator = new ActinInstantiator(config.StartUpLogType);
@@ -100,6 +100,7 @@ namespace KC.Actin {
 
                 if (startUpLog is ActinStandardLogger && !string.IsNullOrWhiteSpace(config.StandardLogOutputFolder)) {
                     var standardLogger = startUpLog as ActinStandardLogger;
+                    standardLogger.SetClock(this.Clock);
                     standardLogger.SetLogFolderPath(config.StandardLogOutputFolder);
                 }
             }
@@ -107,9 +108,8 @@ namespace KC.Actin {
             try {
                 //Do manual user start up:
                 log.Info("Director Initializing");
-                await config.RunBeforeStart(new ActorUtil(null) {
+                await config.RunBeforeStart(new ActorUtil(null, this.Clock) {
                     Log = log,
-                    Started = DateTimeOffset.Now,
                 });
                 //Do automated DI startup:
                 foreach (var a in config.AssembliesToCheckForDI) {
@@ -180,9 +180,8 @@ namespace KC.Actin {
                 }
 
                 runtimeLog.AddDestination(rtLogAsIActinLogger);
-                await config.RunAfterStart(new ActorUtil(null) {
+                await config.RunAfterStart(new ActorUtil(null, this.Clock) {
                     Log = new LogDispatcherForActor(runtimeLog, "After Start"),
-                    Started = DateTimeOffset.UtcNow,
                 });
                 return config;
             }
@@ -193,7 +192,7 @@ namespace KC.Actin {
 
             bool logFailedStartup(Exception ex) {
                 log.Log(new ActinLog {
-                    Time = DateTimeOffset.Now,
+                    Time = Clock.Now,
                     Location = "StartUp",
                     UserMessage = "Actin failed to start.",
                     Details = ex?.ToString(),
@@ -208,7 +207,6 @@ namespace KC.Actin {
                     if (startUpLogAsActor != null) {
                         var disposeHandle = await startUpLogAsActor.Init(() => new DispatchData {
                             MainLog = new ConsoleLogger(),
-                            Time = DateTimeOffset.Now,
                         });
                         if (disposeHandle != null) {
                             lock (lockDisposeHandles) {
@@ -217,7 +215,6 @@ namespace KC.Actin {
                         }
                         await startUpLogAsActor.Run(() => new DispatchData {
                             MainLog = new ConsoleLogger(),
-                            Time = DateTimeOffset.Now,
                         });
                     }
                 }
@@ -352,10 +349,8 @@ namespace KC.Actin {
                                     }
                                     else if (newDependency is IOnInit) {
 #pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-                                        (newDependency as IOnInit).OnInit(new ActorUtil(newDependency as Actor_SansType) {
+                                        (newDependency as IOnInit).OnInit(new ActorUtil(newDependency as Actor_SansType, this.Clock));
 #pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-                                            Started = DateTimeOffset.Now,
-                                        });
                                     }
                                 }
                                 catch (Exception ex) {
@@ -371,7 +366,7 @@ namespace KC.Actin {
                     try {
                         foreach (var process in poolCopy) {
                             try {
-                                if (process.ShouldBeRunNow(DateTimeOffset.Now)) {
+                                if (process.ShouldBeRunNow(Clock.Now)) {
 #pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
                                     process.Run(getCurrentDispatchData);
 #pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
@@ -507,7 +502,6 @@ namespace KC.Actin {
 
         private DispatchData getCurrentDispatchData() {
             return new DispatchData {
-                Time = SystemTimeOverride.Value ?? DateTimeOffset.Now,
                 MainLog = this.runtimeLog,
             };
         }

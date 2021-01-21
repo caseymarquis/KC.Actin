@@ -32,6 +32,7 @@ namespace KC.Actin {
 
         public ActorLog ActorLog { get; private set; } = new ActorLog();
         internal ActinInstantiator Instantiator { get; set; }
+        internal ActorUtil Util;
 
         /// <summary>
         /// Used by scenes. The type specified in the role used to create this actor.
@@ -43,7 +44,6 @@ namespace KC.Actin {
         private string m_ActorName;
         public Actor_SansType() {
             m_ActorName = this.GetType().Name;
-            this.util = new ActorUtil(this);
         }
 
         /// <summary>
@@ -95,7 +95,6 @@ namespace KC.Actin {
         bool immediateRunRequested = false;
 
         private SemaphoreSlim ensureRunIsSynchronous = new SemaphoreSlim(1, 1);
-        private ActorUtil util;
 
         public bool ShouldBeRunNow(DateTimeOffset utcNow) {
             lock (lockEverything) {
@@ -179,9 +178,9 @@ namespace KC.Actin {
             try {
                 try {
                     var dispatchData = getDispatchData();
-                    util.Log.AddDestination(dispatchData.MainLog);
-                    updateUtilFromDispatchData(dispatchData);
-                    await OnInit(this.util);
+                    Util.Log.AddDestination(dispatchData.MainLog);
+                    resetUtilStartTime();
+                    await OnInit(this.Util);
                     lock (lockEverything) {
                         this.initSuccessful = true;
                     }
@@ -190,7 +189,7 @@ namespace KC.Actin {
                     lock (lockEverything) {
                         this.initSuccessful = false;
                     }
-                    util.Log.Error("EventLoop.OnInit()", this.ActorName, ex);
+                    Util.Log.Error("EventLoop.OnInit()", this.ActorName, ex);
                     return null;
                 }
                 finally {
@@ -217,17 +216,17 @@ namespace KC.Actin {
             await ensureRunIsSynchronous.WaitAsync();
             try {
                 try {
-                    updateUtilFromDispatchData(getDispatchData());
-                    await OnRun(util);
+                    resetUtilStartTime();
+                    await OnRun(Util);
                 }
                 catch (Exception ex) when(!throwErrors) {
-                    util.Log.Error(this.ActorName, "EventLoop.OnRun()", ex);
+                    Util.Log.Error(this.ActorName, "EventLoop.OnRun()", ex);
                 }
                 finally {
                     lock (lockEverything) {
                         isRunning = false;
                         watch.Stop();
-                        lastRanUtc = util.Started.AddMilliseconds(watch.ElapsedMilliseconds);
+                        lastRanUtc = Util.Started.AddMilliseconds(watch.ElapsedMilliseconds);
                     }
                 }
             }
@@ -279,25 +278,23 @@ namespace KC.Actin {
 
             if (await ensureRunIsSynchronous.WaitAsync(3000)) {
                 try {
-                    updateUtilFromDispatchData(getDispatchData());
-                    await disposeThings(this.util);
+                    resetUtilStartTime();
+                    await disposeThings(this.Util);
                 }
                 finally {
                     ensureRunIsSynchronous.Release();
                 }
             }
             else {
-                updateUtilFromDispatchData(getDispatchData());
-                this.util.Log.Error(this.ActorName, "OnDispose_Self()", "Disposed without locking. Unable to acquire lock.");
-                await disposeThings(this.util);
+                resetUtilStartTime();
+                this.Util.Log.Error(this.ActorName, "OnDispose_Self()", "Disposed without locking. Unable to acquire lock.");
+                await disposeThings(this.Util);
             }
             
         }
 
-        //We use this roundabout way of updating the util as it ensures everything happens
-        //on the local thread.
-        private void updateUtilFromDispatchData(DispatchData data) {
-            this.util.Update(data);
+        private void resetUtilStartTime() {
+            this.Util.ResetStartTime();
         }
     }
 }

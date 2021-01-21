@@ -16,6 +16,8 @@ namespace KC.Actin
         private List<ActinLog> queuedLogs = new List<ActinLog>();
         private bool m_LogToDisk = true;
 
+        private ActinClock time;
+
         Atom<string> logFolderPath = new Atom<string>();
 
         public bool LogToDisk {
@@ -46,7 +48,7 @@ namespace KC.Actin
             if (path == null) {
                 return null;
             }
-            var fileName = (today ?? DateTimeOffset.Now).ToString("yyyy-MM-dd") + ".xml";
+            var fileName = (today ?? time.Now).ToString("yyyy-MM-dd") + ".xml";
             var fileInfo = new FileInfo(Path.Combine(path, fileName));
             return fileInfo;
         }
@@ -160,6 +162,10 @@ namespace KC.Actin
                 await writeToDisk();
                 await stream.WriteAsync(endBytes, 0, endBytes.Length);
             }
+        }
+
+        internal void SetClock(ActinClock time) {
+            this.time = time;
         }
 
         public void SetLogFolderPath(string standardLogOutputFolder) {

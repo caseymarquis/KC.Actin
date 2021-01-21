@@ -11,45 +11,35 @@ using System.Threading.Tasks;
 
 namespace KC.Actin {
     public class ActorUtil {
-
-        public static ActorUtil Empty => new ActorUtil(null) {
-        };
-
-        public ActorUtil(Actor_SansType _actor) {
+        public ActorUtil(Actor_SansType _actor, ActinClock clock) {
+            if (clock == null) {
+                throw new ArgumentNullException("clock may not be null");
+            }
+            this.clock = clock;
             this.actor = _actor;
-            this.Log = new LogDispatcherForActor(new LogDispatcher(), _actor);
+            this.Log = new LogDispatcherForActor(new LogDispatcher(clock), _actor);
             if (_actor != null) {
                 this.Log.AddDestination(_actor.ActorLog);
             }
         }
 
-        private Actor_SansType actor; 
-        private Stopwatch timeSinceStarted = new Stopwatch();
+        private Actor_SansType actor;
+        private ActinClock clock;
         private Stack<string> locations = new Stack<string>();
 
         public LogDispatcherForActor Log { get; set; }
 
         public string Context => $"{actor?.ActorName}-{actor?.IdString}";
 
-        private DateTimeOffset m_Started;
-        public DateTimeOffset Started {
-            get {
-                return m_Started;
-            }
-            set {
-                timeSinceStarted.Restart();
-                m_Started = value;
-            }
-        }
+        public DateTimeOffset Started { get; private set; }
 
-        public DateTimeOffset Now {
-            get {
-                return m_Started.AddMilliseconds(timeSinceStarted.ElapsedMilliseconds);
-            }
-        }
+        public DateTimeOffset Now => clock.Now;
 
-        public void Update(DispatchData data) {
-            this.Started = data.Time;
+        Stopwatch stopWatch = new Stopwatch();
+
+        public void ResetStartTime() {
+            this.Started = clock.Now;
+            stopWatch.Restart();
         }
 
         private TryResultAsync<T> getTryData<T>(string location, Func<Task<T>> tryThis) {
@@ -83,7 +73,7 @@ namespace KC.Actin {
         internal async Task<T> ExecuteTryTask<T>(TryResultAsync<T> task) {
             locations.Push(task._location);
             try {
-                var startTimeMs = this.timeSinceStarted.ElapsedMilliseconds;
+                var startTimeMs = this.stopWatch.ElapsedMilliseconds;
                 try {
                     try {
                         return await task._tryThis();
@@ -132,7 +122,7 @@ namespace KC.Actin {
                     }
                 }
                 finally {
-                    var ms = timeSinceStarted.ElapsedMilliseconds - startTimeMs;
+                    var ms = stopWatch.ElapsedMilliseconds - startTimeMs;
                     if (ms > task._skipProfilingMs) {
                         try {
                             //TODO: Profiling. Store on the actor in a dictionary. X lowest, X highest, running mean.

@@ -5,6 +5,15 @@ using System.Threading;
 
 namespace KC.Actin.Logs {
     public class LogDispatcher : IActinLogger {
+
+        internal readonly ActinClock Clock;
+        public LogDispatcher(ActinClock clock) {
+            if (clock == null) {
+                throw new ArgumentNullException("clock may not be null. This is typically the Director.Time object");
+            }
+            this.Clock = clock; 
+        }
+
         private ReaderWriterLockSlim lockDestinations = new ReaderWriterLockSlim();
         private List<IActinLogger> destinations = new List<IActinLogger>();
 
@@ -49,7 +58,7 @@ namespace KC.Actin.Logs {
         }
 
         private void dispatch(string context, string location, string userMessage, string details, LogType logType) {
-            var log = new ActinLog(DateTimeOffset.Now, context, location, userMessage, details, logType);
+            var log = new ActinLog(Clock.Now, context, location, userMessage, details, logType);
             Log(log);
         }
 

@@ -37,7 +37,7 @@ namespace KC.Actin.Logs {
         private void dispatch(string userMessage, string secondaryLocation, string details, LogType type) {
             var mainLocation = locationOverride ?? actor?.ActorName;
             var location = secondaryLocation == null ? mainLocation : $"{mainLocation}.{secondaryLocation}";
-            var log = new ActinLog(DateTimeOffset.Now, actor?.IdString, location, userMessage, details, type);
+            var log = new ActinLog(this.dispatcher.Clock.Now, actor?.IdString, location, userMessage, details, type);
             Log(log);
         }
 
