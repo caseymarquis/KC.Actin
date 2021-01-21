@@ -34,6 +34,7 @@ namespace KC.Actin {
         public DateTimeOffset Started { get; private set; }
 
         public DateTimeOffset Now => actor?.IgnoreSimulatedTime == true ? DateTimeOffset.Now : clock.Now;
+        public bool InSimulation => actor?.IgnoreSimulatedTime == true ? false : clock.InSimulation;
 
         Stopwatch stopWatch = new Stopwatch();
 
