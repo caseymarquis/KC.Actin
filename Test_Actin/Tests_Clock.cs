@@ -37,9 +37,7 @@ namespace Test.Actin
 
         [Singleton]
         public class DoIgnoreSimulatedTime : Actor {
-            public DoIgnoreSimulatedTime(){
-                this.IgnoreSimulatedTime = true;
-            }
+            public override bool IgnoreSimulatedTime => true;
 
             protected override TimeSpan RunDelay => new TimeSpan(0, 0, 0, 0, 200);
 
@@ -54,10 +52,6 @@ namespace Test.Actin
 
         [Singleton]
         public class DoNotIgnoreSimulatedTime : Actor {
-            public DoNotIgnoreSimulatedTime() {
-                this.IgnoreSimulatedTime = false;
-            }
-
             protected override TimeSpan RunDelay => new TimeSpan(0, 0, 0, 0, 200);
 
             public Atom<int> TimesRunAtom = new Atom<int>();
