@@ -9,6 +9,14 @@ namespace KC.Actin {
         DateTimeOffset? simulatedStartTime;
         double? m_TimeMultiplier;
 
+        public bool InSimulation {
+            get {
+                lock (lockTime) {
+                    return timeAdjustmentStarted.HasValue;
+                }
+            }
+        }
+
         public DateTimeOffset Now => simulatedNowFromTime(DateTimeOffset.Now);
 
         public void ResetSimulation() {
