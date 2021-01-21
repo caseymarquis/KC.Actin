@@ -67,6 +67,22 @@ namespace KC.Actin {
         /// If an exception is thrown here, OnRun will never start running,
         /// and this AppProcess will be removed from the running processes pool.
         /// </summary>
+
+        Atom<bool> m_IgnoreSimulatedTime = new Atom<bool>(false);
+        /// <summary>
+        /// False by default. If set to true, then adjustments to the Director.Clock
+        /// object will be completely ignored by this Actor, and it will always be passed the
+        /// real system time.
+        /// </summary>
+        public bool IgnoreSimulatedTime {
+            get {
+                return m_IgnoreSimulatedTime.Value;
+            }
+            protected set {
+                m_IgnoreSimulatedTime.Value = value;
+            }
+        }
+
         protected virtual async Task OnInit(ActorUtil util) {
             await Task.FromResult(0);
         }

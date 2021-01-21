@@ -33,12 +33,12 @@ namespace KC.Actin {
 
         public DateTimeOffset Started { get; private set; }
 
-        public DateTimeOffset Now => clock.Now;
+        public DateTimeOffset Now => actor?.IgnoreSimulatedTime == true ? DateTimeOffset.Now : clock.Now;
 
         Stopwatch stopWatch = new Stopwatch();
 
         public void ResetStartTime() {
-            this.Started = clock.Now;
+            this.Started = this.Now;
             stopWatch.Restart();
         }
 
