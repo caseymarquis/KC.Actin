@@ -8,6 +8,7 @@ namespace KC.Actin {
         DateTimeOffset? timeAdjustmentStarted;
         DateTimeOffset? simulatedStartTime;
         double? m_TimeMultiplier;
+        bool m_StopSimulationAtPresent;
 
         public bool InSimulation {
             get {
@@ -15,6 +16,17 @@ namespace KC.Actin {
                     return timeAdjustmentStarted.HasValue;
                 }
             }
+        }
+
+        /// <summary>
+        /// Off by default. When turned on, time simulation will automatically turn itself off when
+        /// the simulation has reached the present time. This allows a smooth transition from speeding
+        /// through past time to operating normally in the present. This is useful when simulating
+        /// past data at high speed, and then transitioning into a normal simulation when finished.
+        /// </summary>
+        public bool StopSimulationAtPresent {
+            get { lock (lockTime) return m_StopSimulationAtPresent; }
+            set { lock (lockTime) m_StopSimulationAtPresent = value; }
         }
 
         public DateTimeOffset Now => simulatedNowFromTime(DateTimeOffset.Now);
@@ -31,7 +43,7 @@ namespace KC.Actin {
         /// Once time simulation has started, you can turn it off by using ResetSimulation.
         /// All calls to this function assume you want to continue faking the time.
         /// Setting an argument to null means "Don't change this on me". It doesn't mean reset
-        /// the value.
+        /// the value. 
         /// </summary>
         public void Simulate(DateTimeOffset? setTimeTo, double? timeMultiplier) {
             lock (lockTime) {
@@ -43,17 +55,26 @@ namespace KC.Actin {
             }
         }
 
-        DateTimeOffset simulatedNowFromTime(DateTimeOffset now) {
+        DateTimeOffset simulatedNowFromTime(DateTimeOffset systemNow) {
             lock (lockTime) {
                 if (timeAdjustmentStarted == null) {
-                    return now;
+                    return systemNow;
                 }
                 var multiplier = m_TimeMultiplier ?? 1;
                 var adjustmentStarted = timeAdjustmentStarted.Value;
                 var simulationStart = simulatedStartTime ?? timeAdjustmentStarted.Value;
 
-                var totalSimulatedTicks = (now - adjustmentStarted).Ticks * multiplier;
-                return simulationStart.AddTicks((long)totalSimulatedTicks);
+                var totalSimulatedTicks = (systemNow - adjustmentStarted).Ticks * multiplier;
+                var simulatedNow = simulationStart.AddTicks((long)totalSimulatedTicks);
+
+                if (m_StopSimulationAtPresent) {
+                    if (simulatedNow >= systemNow) {
+                        ResetSimulation();
+                        return systemNow;
+                    }
+                }
+
+                return simulatedNow;
             }
         }
     }
