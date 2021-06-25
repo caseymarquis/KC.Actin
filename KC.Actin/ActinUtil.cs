@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 
 namespace KC.Actin {
-    public static class Util {
+    public static class ActinUtil {
         public static bool HasAttribute(this Type t, Type attributeType) {
             return Attribute.GetCustomAttribute(t, attributeType) != null;
         }
