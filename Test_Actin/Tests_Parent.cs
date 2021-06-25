@@ -118,9 +118,9 @@ namespace Test.Actin {
                 await Task.FromResult(0);
             });
 #pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-            await Task.Delay(500);
+            await Task.Delay(2500);
             director.Dispose();
-            await Task.Delay(500);
+            await Task.Delay(2500);
 
             var allDependencies = director.GetSingleton<AllInjectedDependencies>().InjectedDependencies.DequeueAll();
 

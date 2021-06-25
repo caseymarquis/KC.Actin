@@ -55,7 +55,7 @@ namespace Test.Actin
             });
 #pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
 
-            await Task.Delay(1000);
+            await Task.Delay(2500);
             var sceneData = director.GetSingleton<TheScene>();
             if (!sceneData.RunningIds.TryDequeueAll(out var ids)) {
                 throw new Exception("No actors were run in the scene.");

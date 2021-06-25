@@ -59,7 +59,7 @@ namespace Test.Actin
             });
 #pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
 
-            await Task.Delay(500);
+            await Task.Delay(2500);
             Assert.True(procManual.SelfRan.Any(), "Manually added process did not run within 250ms.");
             Assert.True(procManual.DiRan.Any(), "DI added process did not run within 250ms.");
             Assert.True(procManual.AutoPoco != null, "Manually added process did not have dependency Poco instantiated.");
@@ -78,7 +78,7 @@ namespace Test.Actin
             });
 #pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
 
-            await Task.Delay(500);
+            await Task.Delay(2500);
             var pocoManual = new ManuallyAddedRootSingletonPoco();
             director.AddSingletonDependency(pocoManual);
 
