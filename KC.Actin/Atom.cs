@@ -35,5 +35,17 @@ namespace KC.Actin {
                 }
             }
         }
+
+        public T Modify(Func<T, T> transformValue) {
+            lockValue.EnterWriteLock();
+            try
+            {
+                m_value = transformValue(m_value);
+                return m_value;
+            }
+            finally {
+                lockValue.ExitWriteLock();
+            }
+        }
     }
 }
