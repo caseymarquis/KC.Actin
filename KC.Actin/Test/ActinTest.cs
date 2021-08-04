@@ -1,4 +1,5 @@
 ﻿using KC.Actin.Test;
+using KC.Ricochet;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -22,7 +23,7 @@ namespace KC.Actin {
                 }
             }
 
-            var constructor = Ricochet.Util.GetConstructor<T>();
+            var constructor = RicochetUtil.GetConstructor<T>();
             var instance = constructor.New();
             instance.Util = new ActorUtil(instance, this.Clock);
             if (isSingleton) {
@@ -31,7 +32,7 @@ namespace KC.Actin {
                 }
             }
 
-            var props = Ricochet.Util.GetPropsAndFields(typeof(T));
+            var props = RicochetUtil.GetPropsAndFields(typeof(T));
             foreach (var prop in props) {
                 if (prop.Markers.Contains(nameof(ParentAttribute))
                     || prop.Markers.Contains(nameof(SiblingAttribute))
@@ -39,7 +40,7 @@ namespace KC.Actin {
                     || prop.Markers.Contains(nameof(FlexibleSiblingAttribute))) {
                     //Create an instance:
                     try {
-                        var relative = Ricochet.Util.GetConstructor(prop.Type).New();
+                        var relative = RicochetUtil.GetConstructor(prop.Type).New();
                         var relativeActor = relative as Actor_SansType;
                         if (relativeActor != null) {
                             relativeActor.Util = new ActorUtil(relativeActor, this.Clock);
@@ -51,7 +52,7 @@ namespace KC.Actin {
                 else if (prop.Markers.Contains(nameof(SingletonAttribute))) {
                     lock (lockSingletons) {
                         if (!singletons.TryGetValue(prop.Type, out var singleton)) {
-                            singleton = Ricochet.Util.GetConstructor(prop.Type).New();
+                            singleton = RicochetUtil.GetConstructor(prop.Type).New();
                             var singletonActor = singleton as Actor_SansType;
                             if (singletonActor != null) {
                                 singletonActor.Util = new ActorUtil(singletonActor, this.Clock);

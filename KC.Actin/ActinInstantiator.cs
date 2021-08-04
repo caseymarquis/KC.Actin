@@ -30,7 +30,7 @@ namespace KC.Actin {
 
             if (_providedSingletonInstance == null) {
                 try {
-                    RicochetInstantiator = Ricochet.Util.GetConstructor(Type);
+                    RicochetInstantiator = RicochetUtil.GetConstructor(Type);
                 }
                 catch (ApplicationException ex) {
                     throw new ApplicationException($"{Type.Name} has no parameterless public constructor.", ex);
@@ -45,7 +45,7 @@ namespace KC.Actin {
         /// </summary>
         internal bool Build(Func<Type, ActinInstantiator> getInstantiatorFromType, ImmutableList<ActinInstantiator> lineage = null) {
             if (lineage == null) {
-                var allAccessors = Ricochet.Util.GetPropsAndFields(this.Type, x => x.IsClass);
+                var allAccessors = RicochetUtil.GetPropsAndFields(this.Type, x => x.IsClass);
                 if (allAccessors.Any(x => x.Markers.Contains(nameof(ParentAttribute)) || x.Markers.Contains(nameof(SiblingAttribute)))) {
                     return false;
                 }
@@ -81,7 +81,7 @@ namespace KC.Actin {
             }
 
             if (!runBefore) {
-                var allAccessors = Ricochet.Util.GetPropsAndFields(this.Type, x => x.IsClass);
+                var allAccessors = RicochetUtil.GetPropsAndFields(this.Type, x => x.IsClass);
                 foreach (var memberAccessor in allAccessors) {
                     AccessorInstantiatorPair getPair(bool flexible) =>
                         new AccessorInstantiatorPair {
