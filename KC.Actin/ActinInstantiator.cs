@@ -226,8 +226,8 @@ namespace KC.Actin {
                                         dep.Accessor.SetVal(instance, siblingInstance);
                                         break;
                                     }
-                                    catch {
-                                        //Swallow 
+                                    catch(Exception ex) {
+                                        throw new ApplicationException($"Actin failed to set sibling dependency {this.Type.Name}.{dep.Accessor.Name} when using parent type {parentInstantiator?.Type.Name ?? "'Not Specified'"} and parent instance {parent ?? "null"}.", ex);
                                     }
                                 }
                             }
