@@ -301,7 +301,7 @@ namespace KC.Actin {
             //This is expected to be null when a parent or sibling is flexible:
             public ActinInstantiator Instantiator;
             public PropertyAndFieldAccessor Accessor;
-            //Used for get a sibling member from a parent:
+            //Used for getting a sibling member from a parent:
             public AccessorInstantiatorPair SiblingDependencyPair;
         }
 

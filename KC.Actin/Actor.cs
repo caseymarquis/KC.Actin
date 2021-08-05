@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 namespace KC.Actin {
     /// <summary>
     /// This is a container for an action which is run periodically in the main application loop.
-    /// How often it's run is based on what its RunDelay() function returns.
+    /// How often it's run is based on what its RunDelay property returns.
     /// </summary>
     public abstract class Actor : Actor<Role, int> {
         public Actor() { }
@@ -62,11 +62,6 @@ namespace KC.Actin {
         /// </summary>
         /// <returns></returns>
         protected virtual TimeSpan RunDelay => new TimeSpan(0, 0, 0, 0, 500);
-        /// <summary>
-        /// This is run once before the first time OnRun is run.
-        /// If an exception is thrown here, OnRun will never start running,
-        /// and this AppProcess will be removed from the running processes pool.
-        /// </summary>
 
         /// <summary>
         /// False by default. If set to true, then adjustments to the Director.Clock
@@ -75,6 +70,11 @@ namespace KC.Actin {
         /// </summary>
         public virtual bool IgnoreSimulatedTime => false;
 
+        /// <summary>
+        /// This is run once before the first time OnRun is run.
+        /// If an exception is thrown here, OnRun will never start running,
+        /// and this AppProcess will be removed from the running processes pool.
+        /// </summary>
         protected virtual async Task OnInit(ActorUtil util) {
             await Task.FromResult(0);
         }
