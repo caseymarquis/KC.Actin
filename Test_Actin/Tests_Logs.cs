@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 using Xunit;
 
 namespace Test.Actin {
-    public class Test_Logs {
+    public class Tests_Logs {
         [Fact]
         public async Task LogToDisk() {
             var at = new ActinTest();
