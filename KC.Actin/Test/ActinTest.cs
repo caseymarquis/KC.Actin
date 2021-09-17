@@ -78,6 +78,24 @@ namespace KC.Actin {
             return await this.GetActorInternal<T>(initialize: true);
         }
 
+        /// <summary>
+        /// Uses reflection to return the value of a field or property with the given type.
+        /// This will also search for inherited dependencies, even if they are private.
+        /// If dependencies from the child will be searched before dependencies from the parent.
+        /// </summary>
+        public U GetDependency<U>(object obj) {
+            if (obj == null) {
+                throw new ArgumentNullException(nameof(obj));
+            }
+            var props = RicochetUtil.GetPropsAndFields(obj.GetType(), x => x.IsClass && typeof(U) == x.Type);
+            if (!props.Any()) {
+                throw new ApplicationException($"{obj.GetType().Name} does not have or inherit a dependency of type {typeof(U).Name}");
+            }
+
+            var propToReturn = props.OrderByDescending(x => x.ClassDepth).First();
+            return (U)propToReturn.GetVal(obj);
+        }
+
         public async Task InitActor(Actor_SansType actor, DateTimeOffset? time = null, bool throwErrors = true) {
             if (time != null) {
                 this.Clock.Simulate(time, null);

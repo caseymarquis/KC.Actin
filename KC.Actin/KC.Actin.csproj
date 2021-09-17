@@ -10,7 +10,7 @@
     <RepositoryUrl>https://github.com/caseymarquis/KC.Actin</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <AllowedOutputExtensionsInPackageBuildOutputFolder>$(AllowedOutputExtensionsInPackageBuildOutputFolder);.pdb</AllowedOutputExtensionsInPackageBuildOutputFolder>
-    <Version>11.1.2</Version>
+    <Version>11.2.0</Version>
     <AssemblyVersion>1.0.0.0</AssemblyVersion>
   </PropertyGroup>
 
