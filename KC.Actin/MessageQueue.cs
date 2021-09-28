@@ -116,5 +116,22 @@ namespace KC.Actin {
                 return true;
             }
         }
+
+        public IEnumerable<T> PeekAll() {
+            lock (lockList) {
+                return list.ToArray();
+            }
+        }
+
+        public bool TryPeek(out T result) {
+            lock (lockList) {
+                if (list.Any()) {
+                    result = list.First();
+                    return true;
+                }
+            }
+            result = default;
+            return false;
+        }
     }
 }
