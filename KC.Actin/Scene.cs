@@ -1,4 +1,5 @@
-﻿using System;
+﻿using KC.Actin.Interfaces;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
@@ -30,7 +31,7 @@ namespace KC.Actin {
         public Scene() { }
 
         [Singleton]
-        private Director director { get; set; }
+        private ICreateInstanceActorForScene directorOrActinTest { get; set; }
         private object lockMyActors = new object();
         private Dictionary<TActorRoleId, TActor> myActors = new Dictionary<TActorRoleId, TActor>();
 
@@ -125,7 +126,7 @@ namespace KC.Actin {
                     var typeToCreate = role.Value.Type ?? typeof(TActor);
                     TActor newActor = null;
                     try {
-                        newActor = (TActor)director.CreateInstance(typeToCreate, this);
+                        newActor = (TActor)directorOrActinTest._CreateInstanceActorForScene_(typeToCreate, this);
                         newActor.SetId(role.Key);
                     }
                     catch (Exception ex) {

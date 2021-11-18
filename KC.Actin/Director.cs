@@ -1,4 +1,5 @@
 ﻿using KC.Actin.ActorUtilNS;
+using KC.Actin.Interfaces;
 using KC.Actin.Logs;
 using KC.Ricochet;
 using System;
@@ -9,7 +10,7 @@ using System.Threading;
 using System.Threading.Tasks;
 
 namespace KC.Actin {
-    public class Director : IDisposable {
+    public class Director : IDisposable, ICreateInstanceActorForScene {
         private bool __running__ = false;
         private object lockRunning = new object();
 
@@ -59,7 +60,7 @@ namespace KC.Actin {
                 }
                 __running__ = true;
             }
-            this.AddSingletonDependency(this);
+            this.AddSingletonDependency(this, typeof(ICreateInstanceActorForScene));
 
             //Get configuration from the user:
             var config = new ConfigureUtil();
@@ -548,7 +549,7 @@ namespace KC.Actin {
             return (T)GetSingleton(typeof(T));
         }
 
-        public Actor_SansType CreateInstance(Type typeToCreate, Actor_SansType parent) {
+        public Actor_SansType _CreateInstanceActorForScene_(Type typeToCreate, Actor_SansType parent) {
             ActinInstantiator inst;
             ActinInstantiator parentInst;
             bool needParentInstantiator = parent != null;

@@ -1,4 +1,5 @@
-﻿using KC.Actin.Test;
+﻿using KC.Actin.Interfaces;
+using KC.Actin.Test;
 using KC.Ricochet;
 using System;
 using System.Collections.Generic;
@@ -7,32 +8,39 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace KC.Actin {
-    public class ActinTest {
+    public class ActinTest : ICreateInstanceActorForScene {
 
         object lockSingletons = new object();
         Dictionary<Type, object> singletons = new Dictionary<Type, object>();
         public ActinClock Clock { get; private set; } = new ActinClock();
 
-        private async Task<T> GetActorInternal<T>(bool initialize) where T : Actor_SansType {
-            var isSingleton = typeof(T).HasAttribute<SingletonAttribute>();
+        public ActinTest() {
+            singletons[typeof(ICreateInstanceActorForScene)] = this;
+        }
+
+        private async Task<object> GetActorInternal(Type t, bool initialize) {
+            var isSingleton = t.HasAttribute<SingletonAttribute>();
             if (isSingleton) {
                 lock (lockSingletons) {
-                    if (singletons.TryGetValue(typeof(T), out var singletonInstance)) {
-                        return (T)singletonInstance;
+                    if (singletons.TryGetValue(t, out var singletonInstance)) {
+                        return singletonInstance;
                     }
                 }
             }
 
-            var constructor = RicochetUtil.GetConstructor<T>();
+            var constructor = RicochetUtil.GetConstructor(t);
             var instance = constructor.New();
-            instance.Util = new ActorUtil(instance, this.Clock);
+            var actorInstance = instance as Actor_SansType;
+            if (actorInstance != null) {
+                actorInstance.Util = new ActorUtil(actorInstance, this.Clock);
+            }
             if (isSingleton) {
                 lock (lockSingletons) {
-                    singletons[typeof(T)] = instance;
+                    singletons[t] = instance;
                 }
             }
 
-            var props = RicochetUtil.GetPropsAndFields(typeof(T));
+            var props = RicochetUtil.GetPropsAndFields(t);
             foreach (var prop in props) {
                 if (prop.Markers.Contains(nameof(ParentAttribute))
                     || prop.Markers.Contains(nameof(SiblingAttribute))
@@ -64,18 +72,22 @@ namespace KC.Actin {
                 }
             }
 
-            if (initialize) {
-                await this.InitActor((Actor_SansType)instance);
+            if (initialize && actorInstance != null) {
+                await this.InitActor(actorInstance);
             }
-            return (T)instance;
+            return instance;
         }
 
         public T GetActor<T>() where T : Actor_SansType {
-            return this.GetActorInternal<T>(initialize: false).Result;
+            return (T)this.GetActorInternal(typeof(T), initialize: false).Result;
+        }
+
+        public T GetObject<T>() {
+            return (T)this.GetActorInternal(typeof(T), initialize: false).Result;
         }
 
         public async Task<T> GetInitializedActor<T>() where T : Actor_SansType {
-            return await this.GetActorInternal<T>(initialize: true);
+            return (T) await this.GetActorInternal(typeof(T), initialize: true);
         }
 
         /// <summary>
@@ -121,6 +133,10 @@ namespace KC.Actin {
             await actor.ActuallyDispose(() => new ActorUtilNS.DispatchData {
                 MainLog = new EmptyLog(),
             }, throwErrors);
+        }
+
+        public Actor_SansType _CreateInstanceActorForScene_(Type typeToCreate, Actor_SansType parent) {
+            return (Actor_SansType)GetActorInternal(typeToCreate, false).Result;
         }
     }
 }
