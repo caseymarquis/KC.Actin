@@ -18,7 +18,7 @@ namespace KC.Actin {
             singletons[typeof(ICreateInstanceActorForScene)] = this;
         }
 
-        private async Task<object> GetActorInternal(Type t, bool initialize) {
+        private async Task<object> GetActorInternal(Type t, bool initialize, Actor_SansType parentScene) {
             var isSingleton = t.HasAttribute<SingletonAttribute>();
             if (isSingleton) {
                 lock (lockSingletons) {
@@ -47,7 +47,19 @@ namespace KC.Actin {
                     || prop.Markers.Contains(nameof(FlexibleParentAttribute))
                     || prop.Markers.Contains(nameof(FlexibleSiblingAttribute))) {
                     //Create an instance:
-                    try {
+                    if (parentScene != null) {
+                        if (prop.Markers.Contains(nameof(FlexibleParentAttribute))) {
+                            prop.SetVal(instance, parentScene);
+                        }
+                        else if (prop.Markers.Contains(nameof(ParentAttribute))) {
+                            throw new ApplicationException($"In class {t.Name}, field {prop.Name} must use the FlexibleParent attribute instead of the Parent attribute, as its parent is a Scene.");
+                        }
+                        else {
+                            var relative = this.GetDependencyInternal(prop.Type, parentScene);
+                            prop.SetVal(instance, relative);
+                        }
+                    }
+                    else {
                         var relative = RicochetUtil.GetConstructor(prop.Type).New();
                         var relativeActor = relative as Actor_SansType;
                         if (relativeActor != null) {
@@ -55,7 +67,6 @@ namespace KC.Actin {
                         }
                         prop.SetVal(instance, relative);
                     }
-                    catch { }
                 }
                 else if (prop.Markers.Contains(nameof(SingletonAttribute))) {
                     lock (lockSingletons) {
@@ -70,6 +81,14 @@ namespace KC.Actin {
                         prop.SetVal(instance, singleton);
                     }
                 }
+                else if (prop.Markers.Contains(nameof(InstanceAttribute))) {
+                    var child = RicochetUtil.GetConstructor(prop.Type).New();
+                    var childActor = child as Actor_SansType;
+                    if (childActor != null) {
+                        childActor.Util = new ActorUtil(childActor, this.Clock);
+                    }
+                    prop.SetVal(instance, child);
+                }
             }
 
             if (initialize && actorInstance != null) {
@@ -79,15 +98,15 @@ namespace KC.Actin {
         }
 
         public T GetActor<T>() where T : Actor_SansType {
-            return (T)this.GetActorInternal(typeof(T), initialize: false).Result;
+            return (T)this.GetActorInternal(typeof(T), initialize: false, parentScene: null).Result;
         }
 
         public T GetObject<T>() {
-            return (T)this.GetActorInternal(typeof(T), initialize: false).Result;
+            return (T)this.GetActorInternal(typeof(T), initialize: false, parentScene: null).Result;
         }
 
         public async Task<T> GetInitializedActor<T>() where T : Actor_SansType {
-            return (T) await this.GetActorInternal(typeof(T), initialize: true);
+            return (T)await this.GetActorInternal(typeof(T), initialize: true, parentScene: null);
         }
 
         /// <summary>
@@ -96,16 +115,23 @@ namespace KC.Actin {
         /// If dependencies from the child will be searched before dependencies from the parent.
         /// </summary>
         public U GetDependency<U>(object obj) {
+            return (U)GetDependencyInternal(typeof(U), obj);
+        }
+
+        private object GetDependencyInternal(Type t, object obj) {
             if (obj == null) {
                 throw new ArgumentNullException(nameof(obj));
             }
-            var props = RicochetUtil.GetPropsAndFields(obj.GetType(), x => x.IsClass && typeof(U) == x.Type);
+            var props = RicochetUtil.GetPropsAndFields(obj.GetType(), x => x.IsClass && t == x.Type);
             if (!props.Any()) {
-                throw new ApplicationException($"{obj.GetType().Name} does not have or inherit a dependency of type {typeof(U).Name}");
+                props = RicochetUtil.GetPropsAndFields(obj.GetType(), x => x.IsClass && x.Type.IsSubclassOf(t));
+            }
+            if (!props.Any()) {
+                throw new ApplicationException($"{obj.GetType().Name} does not have or inherit a dependency of type {t.Name}");
             }
 
             var propToReturn = props.OrderByDescending(x => x.ClassDepth).First();
-            return (U)propToReturn.GetVal(obj);
+            return propToReturn.GetVal(obj);
         }
 
         public async Task InitActor(Actor_SansType actor, DateTimeOffset? time = null, bool throwErrors = true) {
@@ -136,7 +162,7 @@ namespace KC.Actin {
         }
 
         public Actor_SansType _CreateInstanceActorForScene_(Type typeToCreate, Actor_SansType parent) {
-            return (Actor_SansType)GetActorInternal(typeToCreate, false).Result;
+            return (Actor_SansType)GetActorInternal(typeToCreate, false, parent).Result;
         }
     }
 }

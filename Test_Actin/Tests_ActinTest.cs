@@ -34,10 +34,22 @@ namespace Test.Actin {
             }
         }
 
+        [Instance]
         public class SceneChild : Actor {
+            [FlexibleParent] public SceneParent Parent;
+            [Singleton] public SceneChildDependencySingleton Singleton;
+            [Instance] public SceneChildDependencySingleton Instance;
             protected override async Task OnRun(ActorUtil util) {
                 await Task.FromResult(0);
             }
+        }
+
+        [Singleton]
+        public class SceneChildDependencySingleton {
+        }
+
+        [Instance]
+        public class SceneChildDependencyInstance {
         }
 
         [Singleton] public class ParentOnly { }
@@ -67,6 +79,13 @@ namespace Test.Actin {
             Assert.Contains(allChildren, x => x.Id == 1);
             Assert.Contains(allChildren, x => x.Id == 2);
             Assert.Contains(allChildren, x => x.Id == 3);
+
+            var child = allChildren.First();
+            Assert.NotNull(child.Singleton);
+            Assert.NotNull(child.Instance);
+            Assert.NotNull(child.Parent);
+
+            Assert.Equal(scene, child.Parent);
         }
     }
 }
