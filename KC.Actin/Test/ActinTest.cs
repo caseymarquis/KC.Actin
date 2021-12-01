@@ -32,7 +32,9 @@ namespace KC.Actin {
             var instance = constructor.New();
             var actorInstance = instance as Actor_SansType;
             if (actorInstance != null) {
-                actorInstance.Util = new ActorUtil(actorInstance, this.Clock);
+                actorInstance.Util = new ActorUtil(actorInstance, this.Clock) {
+                    _IsTest_ = true,
+                };
             }
             if (isSingleton) {
                 lock (lockSingletons) {
@@ -63,7 +65,9 @@ namespace KC.Actin {
                         var relative = RicochetUtil.GetConstructor(prop.Type).New();
                         var relativeActor = relative as Actor_SansType;
                         if (relativeActor != null) {
-                            relativeActor.Util = new ActorUtil(relativeActor, this.Clock);
+                            relativeActor.Util = new ActorUtil(relativeActor, this.Clock) {
+                                _IsTest_ = true,
+                            };
                         }
                         prop.SetVal(instance, relative);
                     }
@@ -74,7 +78,9 @@ namespace KC.Actin {
                             singleton = RicochetUtil.GetConstructor(prop.Type).New();
                             var singletonActor = singleton as Actor_SansType;
                             if (singletonActor != null) {
-                                singletonActor.Util = new ActorUtil(singletonActor, this.Clock);
+                                singletonActor.Util = new ActorUtil(singletonActor, this.Clock) {
+                                    _IsTest_ = true
+                                };
                             }
                             singletons[prop.Type] = singleton;
                         }
@@ -85,7 +91,9 @@ namespace KC.Actin {
                     var child = RicochetUtil.GetConstructor(prop.Type).New();
                     var childActor = child as Actor_SansType;
                     if (childActor != null) {
-                        childActor.Util = new ActorUtil(childActor, this.Clock);
+                        childActor.Util = new ActorUtil(childActor, this.Clock) {
+                            _IsTest_ = true
+                        };
                     }
                     prop.SetVal(instance, child);
                 }

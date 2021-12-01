@@ -23,6 +23,20 @@ namespace KC.Actin {
             }
         }
 
+        //Init only properties would make this nicer, but we'd have to bump up from .net standard 2.1
+        readonly Atom<bool> isTestAtom = new Atom<bool>(false);
+        /// <summary>
+        /// Set to true if an Actor is run using the ActinTest class.
+        /// </summary>
+        public bool _IsTest_ {
+            get {
+                return isTestAtom.Value;
+            }
+            set {
+                isTestAtom.Value = value;
+            }
+        }
+
         private Actor_SansType actor;
         private ActinClock clock;
         private Stack<string> locations = new Stack<string>();
