@@ -78,7 +78,7 @@ namespace Test.Actin
                 await Task.FromResult(0);
             });
 #pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-            await Task.Delay(100);
+            await Task.Delay(700);
             var timeTester = director.GetSingleton<ManualStepTester>();
             Assert.Equal(1, timeTester.TimesRunAtom.Value);
             clock.Simulate(clock.Now.Add(new TimeSpan(5, 1, 0)), 0);
