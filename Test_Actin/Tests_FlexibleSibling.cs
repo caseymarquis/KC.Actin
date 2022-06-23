@@ -83,7 +83,7 @@ namespace Test.Actin {
             [Instance]
             InstancePocoChild child;
 
-            protected override TimeSpan RunDelay => new TimeSpan(0, 0, 0, 0, 10);
+            protected override TimeSpan RunInterval => new TimeSpan(0, 0, 0, 0, 10);
             protected async override Task OnRun(ActorUtil util) {
                 await Task.FromResult(0);
             }
@@ -109,7 +109,7 @@ namespace Test.Actin {
             [Instance]
             InstancePocoChild child;
 
-            protected override TimeSpan RunDelay => new TimeSpan(0, 0, 0, 0, 10);
+            protected override TimeSpan RunInterval => new TimeSpan(0, 0, 0, 0, 10);
             protected override async Task<IEnumerable<Role>> CastActors(ActorUtil util, Dictionary<int, ActorInScene> myActors) {
                 return await Task.FromResult(new Role[] {
                     new Role {
@@ -144,7 +144,7 @@ namespace Test.Actin {
             [Instance]
             InstancePocoChild child;
 
-            protected override TimeSpan RunDelay => new TimeSpan(0, 0, 0, 0, 10);
+            protected override TimeSpan RunInterval => new TimeSpan(0, 0, 0, 0, 10);
             protected async override Task OnRun(ActorUtil util) {
                 await Task.FromResult(0);
             }

@@ -35,7 +35,7 @@ namespace KC.Actin {
         private object lockMyActors = new object();
         private Dictionary<TActorRoleId, TActor> myActors = new Dictionary<TActorRoleId, TActor>();
 
-        protected override TimeSpan RunDelay => new TimeSpan(0, 0, 5);
+        protected override TimeSpan RunInterval => new TimeSpan(0, 0, 5);
 
         /// <summary>
         /// Return a list of Roles which will be used to create matching Actors.

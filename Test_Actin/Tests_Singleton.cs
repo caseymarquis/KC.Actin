@@ -14,7 +14,7 @@ namespace Test.Actin
         }
 
         public class ProcManual : Actor {
-            protected override TimeSpan RunDelay => new TimeSpan(0, 0, 0, 0, 10);
+            protected override TimeSpan RunInterval => new TimeSpan(0, 0, 0, 0, 10);
 
             public MessageQueue<int> SelfRan = new MessageQueue<int>();
             public MessageQueue<int> DiRan = new MessageQueue<int>();
@@ -36,7 +36,7 @@ namespace Test.Actin
             [Singleton]
             ProcManual procManual;
 
-            protected override TimeSpan RunDelay => new TimeSpan(0, 0, 0, 0, 10);
+            protected override TimeSpan RunInterval => new TimeSpan(0, 0, 0, 0, 10);
             protected async override Task OnRun(ActorUtil util) {
                 procManual.DiRan.Enqueue(1);
                 await Task.FromResult(0);

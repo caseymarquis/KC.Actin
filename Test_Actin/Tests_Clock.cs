@@ -11,7 +11,7 @@ namespace Test.Actin
     {
         [Singleton]
         public class ManualStepTester : Actor {
-            protected override TimeSpan RunDelay => new TimeSpan(5, 0, 0);
+            protected override TimeSpan RunInterval => new TimeSpan(5, 0, 0);
 
             public Atom<int> TimesRunAtom = new Atom<int>();
 
@@ -24,7 +24,7 @@ namespace Test.Actin
 
         [Singleton]
         public class SpeedUpTester : Actor {
-            protected override TimeSpan RunDelay => new TimeSpan(0, 0, 0, 0, 200);
+            protected override TimeSpan RunInterval => new TimeSpan(0, 0, 0, 0, 200);
 
             public Atom<int> TimesRunAtom = new Atom<int>();
 
@@ -39,7 +39,7 @@ namespace Test.Actin
         public class DoIgnoreSimulatedTime : Actor {
             public override bool IgnoreSimulatedTime => true;
 
-            protected override TimeSpan RunDelay => new TimeSpan(0, 0, 0, 0, 200);
+            protected override TimeSpan RunInterval => new TimeSpan(0, 0, 0, 0, 200);
 
             public Atom<int> TimesRunAtom = new Atom<int>();
 
@@ -52,7 +52,7 @@ namespace Test.Actin
 
         [Singleton]
         public class DoNotIgnoreSimulatedTime : Actor {
-            protected override TimeSpan RunDelay => new TimeSpan(0, 0, 0, 0, 200);
+            protected override TimeSpan RunInterval => new TimeSpan(0, 0, 0, 0, 200);
 
             public Atom<int> TimesRunAtom = new Atom<int>();
 

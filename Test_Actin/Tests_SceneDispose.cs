@@ -12,7 +12,7 @@ namespace Test.Actin
     {
         [Singleton]
         public class TheScene : Scene<SomeInstanceType> {
-            protected override TimeSpan RunDelay => new TimeSpan(0, 0, 0, 0, 10);
+            protected override TimeSpan RunInterval => new TimeSpan(0, 0, 0, 0, 10);
 
             public MessageQueue<int> Disposed = new MessageQueue<int>();
             public MessageQueue<int> Initialized = new MessageQueue<int>();
@@ -31,7 +31,7 @@ namespace Test.Actin
 
         [Instance]
         public class SomeInstanceType : Actor {
-            protected override TimeSpan RunDelay => new TimeSpan(0, 0, 0, 0, 10);
+            protected override TimeSpan RunInterval => new TimeSpan(0, 0, 0, 0, 10);
 
             [FlexibleParent]
             private TheScene theScene;

@@ -10,7 +10,7 @@ namespace KC.Actin
     public class ActinStandardLogger : Actor, IActinLogger
     {
         public override string ActorName => nameof(ActinStandardLogger);
-        protected override TimeSpan RunDelay => new TimeSpan(0, 0, 15);
+        protected override TimeSpan RunInterval => new TimeSpan(0, 0, 15);
 
         private object lockEverything = new object();
         private List<ActinLog> queuedLogs = new List<ActinLog>();

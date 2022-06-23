@@ -80,7 +80,7 @@ namespace Test.Actin {
             [Instance]
             SingletonActorActorChild actorChild;
 
-            protected override TimeSpan RunDelay => new TimeSpan(0, 0, 0, 0, 10);
+            protected override TimeSpan RunInterval => new TimeSpan(0, 0, 0, 0, 10);
 
             protected override async Task OnInit(ActorUtil util) {
                 allDependencies.InjectedDependencies.Enqueue(this);

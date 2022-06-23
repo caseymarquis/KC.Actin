@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 namespace KC.Actin {
     /// <summary>
     /// This is a container for an action which is run periodically in the main application loop.
-    /// How often it's run is based on what its RunDelay property returns.
+    /// How often it's run is based on what its RunInterval property returns.
     /// </summary>
     public abstract class Actor : Actor<Role, int> {
         public Actor() { }
@@ -61,7 +61,7 @@ namespace KC.Actin {
         /// We only guarantee it won't be run more often than this delay.
         /// </summary>
         /// <returns></returns>
-        protected virtual TimeSpan RunDelay => new TimeSpan(0, 0, 0, 0, 500);
+        protected virtual TimeSpan RunInterval => new TimeSpan(0, 0, 0, 0, 500);
 
         /// <summary>
         /// False by default. If set to true, then adjustments to the Director.Clock
@@ -79,7 +79,7 @@ namespace KC.Actin {
             await Task.FromResult(0);
         }
         /// <summary>
-        /// This is run at approximately RunDelay() intervals (probably slightly slower.).
+        /// This is run at approximately RunInterval() intervals (probably slightly slower.).
         /// </summary>
         /// <returns></returns>
         protected abstract Task OnRun(ActorUtil util);
@@ -118,7 +118,7 @@ namespace KC.Actin {
                         return false;
                     }
                     var timeSinceRan = utcNow - lastRanUtc;
-                    return immediateRunRequested || (timeSinceRan > this.RunDelay);
+                    return immediateRunRequested || (timeSinceRan > this.RunInterval);
                 }
                 finally {
                     if (immediateRunRequestedWas) {
