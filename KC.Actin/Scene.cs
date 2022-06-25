@@ -126,7 +126,7 @@ namespace KC.Actin {
                     var typeToCreate = role.Value.Type ?? typeof(TActor);
                     TActor newActor = null;
                     try {
-                        newActor = (TActor)directorOrActinTest._CreateInstanceActorForScene_(typeToCreate, this);
+                        newActor = (TActor)directorOrActinTest.CreateInstanceActorForScene(typeToCreate, this);
                         newActor.SetId(role.Key);
                     }
                     catch (Exception ex) {

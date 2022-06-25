@@ -549,7 +549,7 @@ namespace KC.Actin {
             return (T)GetSingleton(typeof(T));
         }
 
-        public Actor_SansType _CreateInstanceActorForScene_(Type typeToCreate, Actor_SansType parent) {
+        Actor_SansType ICreateInstanceActorForScene.CreateInstanceActorForScene(Type typeToCreate, Actor_SansType parent) {
             ActinInstantiator inst;
             ActinInstantiator parentInst;
             bool needParentInstantiator = parent != null;

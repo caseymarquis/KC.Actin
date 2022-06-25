@@ -169,7 +169,7 @@ namespace KC.Actin {
             }, throwErrors);
         }
 
-        public Actor_SansType _CreateInstanceActorForScene_(Type typeToCreate, Actor_SansType parent) {
+        Actor_SansType ICreateInstanceActorForScene.CreateInstanceActorForScene(Type typeToCreate, Actor_SansType parent) {
             return (Actor_SansType)GetActorInternal(typeToCreate, false, parent).Result;
         }
     }
