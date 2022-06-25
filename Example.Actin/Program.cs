@@ -114,13 +114,7 @@ namespace Example.Actin
 
             name.Value = $"{myInfo.Name} :: {myInfo.Id}";
 
-            //util also comes with several utility functions which
-            //make profiling and detailed error logging easier.
-            var data = util.Try("CheckWidget", () => CheckOnWidget(myInfo))
-                .ErrorMessage("Widget check failed.")
-                .SwallowExceptionWithoutCatch()
-                .SkipProfilingIf(fasterThanXMilliseconds: 1000)
-                .Execute();
+            var data = CheckOnWidget(myInfo);
             databasePusher.DataToPush.Enqueue(data);
         }
     }

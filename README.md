@@ -50,7 +50,7 @@ namespace Example.Actin
         /// You can optionally specify how often the Actor runs.
         /// The default is to run twice per second.
         /// </summary>
-        protected override TimeSpan RunDelay => new TimeSpan(0, 0, 5);
+        protected override TimeSpan RunInterval => new TimeSpan(0, 0, 5);
 
         /// <summary>
         /// An 'Atom' is just a simple wrapper around an object that ensures all access is locked (using a ReaderWriterLockSlim)
@@ -121,7 +121,7 @@ namespace Example.Actin
         [Singleton] CacheTheWidgetConfigurations widgetCache;
         [Singleton] PushWidgetDataToTheDatabase databasePusher;
 
-        protected override TimeSpan RunDelay => new TimeSpan(0, 0, 2);
+        protected override TimeSpan RunInterval => new TimeSpan(0, 0, 2);
 
         protected abstract WidgetData CheckOnWidget(WidgetConfig info);
 
@@ -133,13 +133,7 @@ namespace Example.Actin
 
             name.Value = $"{myInfo.Name} :: {myInfo.Id}";
 
-            //util also comes with several utility functions which
-            //make profiling and detailed error logging easier.
-            var data = util.Try("CheckWidget", () => CheckOnWidget(myInfo))
-                .ErrorMessage("Widget check failed.")
-                .SwallowExceptionWithoutCatch()
-                .SkipProfilingIf(fasterThanXMilliseconds: 1000)
-                .Execute();
+            var data = CheckOnWidget(myInfo);
             databasePusher.DataToPush.Enqueue(data);
         }
     }
