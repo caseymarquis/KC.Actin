@@ -139,6 +139,7 @@ namespace KC.Actin {
         bool initStarted = false;
         bool isRunning = false;
         bool immediateRunRequested = false;
+        int runCounter = 0;
 
         private SemaphoreSlim ensureRunIsSynchronous = new SemaphoreSlim(1, 1);
 
@@ -176,6 +177,31 @@ namespace KC.Actin {
         public void RequestRun() {
             lock (lockEverything) {
                 immediateRunRequested = true;
+            }
+        }
+
+        /// <summary>
+        /// Request that the actor run immediately, and wait until it has finished running
+        /// or errored out in the process of running.
+        /// </summary>
+        /// <param name="cToken"></param>
+        /// <returns></returns>
+        public async Task RequestAndAwaitRun(CancellationToken? cToken = null) {
+            int runCounterWas;
+            lock (lockEverything) {
+                runCounterWas = runCounter;
+                immediateRunRequested = true;
+            }
+
+            while (true) {
+                await Task.Delay(10);
+                lock (lockEverything) {
+                    if (runCounterWas != runCounter) {
+                        return;
+                    }
+                }
+                ActorDisposedToken.ThrowIfCancellationRequested();
+                cToken?.ThrowIfCancellationRequested();
             }
         }
 
@@ -286,6 +312,7 @@ namespace KC.Actin {
                         isRunning = false;
                         watch.Stop();
                         lastRanUtc = Util.Started.AddMilliseconds(watch.ElapsedMilliseconds);
+                        runCounter++;
                     }
                 }
             }
