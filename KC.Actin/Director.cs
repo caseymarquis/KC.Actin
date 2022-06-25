@@ -296,6 +296,11 @@ namespace KC.Actin {
                             lock (lockDisposeHandles) {
                                 disposeHandles.Add(disposeHandle);
                             }
+                            lock (lockProcessPool) {
+                                if (!processPool.Contains(startUpLogAsActor)){
+                                    processPool.Add(startUpLogAsActor);
+                                }
+                            }
                         }
                         await startUpLogAsActor.Run(() => new DispatchData {
                             MainLog = new ConsoleLogger(),
@@ -318,6 +323,11 @@ namespace KC.Actin {
                     if (disposeHandle != null) {
                         lock (lockDisposeHandles) {
                             disposeHandles.Add(disposeHandle);
+                        }
+                        lock (lockProcessPool) {
+                            if (!processPool.Contains(rtLog)) {
+                                processPool.Add(rtLog);
+                            }
                         }
                     }
                     await rtLog.Run(() => new DispatchData {
