@@ -14,6 +14,9 @@ namespace KC.Actin
     /// If this class is used on a field or property, then that field or property will be automatically initialized
     /// with the singleton instance.
     public class SingletonAttribute : Ricochet.RicochetMark {
+        /// <summary>
+        /// See class description.
+        /// </summary>
         public SingletonAttribute() : base(nameof(SingletonAttribute)){
         }
     }
@@ -29,6 +32,9 @@ namespace KC.Actin
     /// When Instance members are disposed, the containing Actor is not disposed.
     /// </summary>
     public class InstanceAttribute : Ricochet.RicochetMark {
+        /// <summary>
+        /// See class description.
+        /// </summary>
         public InstanceAttribute() : base(nameof(InstanceAttribute)){
         }
     }
@@ -44,6 +50,9 @@ namespace KC.Actin
     /// For more flexibility (and more footguns) use the 'FlexibleParent' attribute.
     /// </summary>
     public class ParentAttribute : Ricochet.RicochetMark {
+        /// <summary>
+        /// See class description.
+        /// </summary>
         public ParentAttribute() : base(nameof(ParentAttribute)){
         }
     }
@@ -54,6 +63,9 @@ namespace KC.Actin
     /// to its type.
     /// </summary>
     public class FlexibleParentAttribute : Ricochet.RicochetMark {
+        /// <summary>
+        /// See class description.
+        /// </summary>
         public FlexibleParentAttribute() : base(nameof(FlexibleParentAttribute)){
         }
     }
@@ -69,6 +81,9 @@ namespace KC.Actin
     /// parents to be used.
     /// </summary>
     public class SiblingAttribute : Ricochet.RicochetMark {
+        /// <summary>
+        /// See class description.
+        /// </summary>
         public SiblingAttribute() : base(nameof(SiblingAttribute)){
         }
     }
@@ -78,6 +93,9 @@ namespace KC.Actin
     /// a compatible sibling cannot be found on the parent.
     /// </summary>
     public class FlexibleSiblingAttribute : Ricochet.RicochetMark {
+        /// <summary>
+        /// See class description.
+        /// </summary>
         public FlexibleSiblingAttribute() : base(nameof(FlexibleSiblingAttribute)){
         }
     }

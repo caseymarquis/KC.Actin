@@ -10,6 +10,13 @@ using System.Threading;
 using System.Threading.Tasks;
 
 namespace KC.Actin {
+    /// <summary>
+    /// A director instantiates classes marked with <c cref="SingletonAttribute">[Singleton]</c>, resolves their dependencies,
+    /// initializes <c cref="Actor">Actors</c> and classes marked with <c cref="IOnInit">IOnInit</c>, and then ensures that actors
+    /// are periodically run based on their <c cref="Actor_SansType.RunInterval">RunInterval</c>.
+    /// When the director is disposed, it calls <c cref="Actor_SansType.OnDispose">OnDispose()</c> on all actors,
+    /// as well as IDisposable.Dispose on all Singletons and their injected dependencies.
+    /// </summary>
     public class Director : IDisposable, ICreateInstanceActorForScene {
         private bool __running__ = false;
         private object lockRunning = new object();
@@ -19,6 +26,15 @@ namespace KC.Actin {
 
         private static ReaderWriterLockSlim lockDirectors = new ReaderWriterLockSlim();
         private static Dictionary<string, Director> directors = new Dictionary<string, Director>();
+
+        private CancellationTokenSource cancelWhenDisposed = new CancellationTokenSource();
+        /// <summary>
+        /// If the director is disposed, then cancel will be called on this token.
+        /// This token can be passed to critical services (ie asp.net) and will ensure
+        /// they are shut down with the director.
+        /// </summary>
+        public CancellationToken DirectorDisposedToken => cancelWhenDisposed.Token;
+
         /// <summary>
         /// Try to get the running director with the given name.
         /// </summary>
@@ -32,6 +48,13 @@ namespace KC.Actin {
             }
         }
 
+        /// <summary>
+        /// During testing, or when running a simulation, it's often useful to have full
+        /// control over the perceived system time. The director's clock allows you to do this.
+        /// When actors are run, instead of directly accessing DateTimeOffset.Now, you should
+        /// instead use <c cref="ActorUtil.Now">ActorUtil.Now</c>. You can then fully control the perceived
+        /// time during testing, or if the need arises for other reasons.
+        /// </summary>
         public readonly ActinClock Clock = new ActinClock();
 
         private object lockDisposeHandles = new object();
@@ -43,12 +66,21 @@ namespace KC.Actin {
         private object lockNewlyRegisteredDependencies = new object();
         private List<object> newlyRegisteredDependencies = new List<object>();
 
+        /// <summary>
+        /// Configure the director, and then instantiate all singleton actors,
+        /// classes, and their dependencies.
+        /// </summary>
         public async Task Run(Action<ConfigureUtil> configure = null) {
             var config = await this.init(configure ?? (_ => { }));
             await runMainLoop(config);
         }
 
         private LogDispatcher runtimeLog; //Set in init
+        /// <summary>
+        /// The primary log for the director. This can be customized when
+        /// Director.Run is called. <c cref="ActorUtil.Log">ActorUtil.Log</c>
+        /// routes generated logs to this object.
+        /// </summary>
         public LogDispatcher Log => runtimeLog;
 
         //Init ======================= Init:
@@ -391,6 +423,12 @@ namespace KC.Actin {
         }
 
         private bool shuttingDown = false;
+        /// <summary>
+        /// Calls <c cref="Actor_SansType.OnDispose">OnDispose()</c> on all actors,
+        /// as well as IDisposable.Dispose on all Singletons and their injected dependencies.
+        /// Also cancels all CancellationTokens acquired from <c cref="Director.DirectorDisposedToken">
+        /// Director.DirectorDisposedToken</c>
+        /// </summary>
         public void Dispose() {
             runtimeLog?.Info("DirectorLoopShutdown");
             lock (lockRunning) {
@@ -400,6 +438,7 @@ namespace KC.Actin {
                 shuttingDown = true;
                 __running__ = false;
             }
+            cancelWhenDisposed.Cancel();
             List<ActorDisposeHandle> handles = null;
             lock (lockDisposeHandles) {
                 handles = disposeHandles;
@@ -455,6 +494,9 @@ namespace KC.Actin {
             }
         }
 
+        /// <summary>
+        /// Returns true if the director has been started, but not yet disposed.
+        /// </summary>
         public bool Running {
             get {
                 lock (lockRunning) {
@@ -463,6 +505,12 @@ namespace KC.Actin {
             }
         }
 
+        /// <summary>
+        /// Allows an object to be manually inserted as a Singleton for dependency injection.
+        /// This is useful when an object needs to be instantiate before the director is available,
+        /// but is used as a dependency by actors or classes the director creates. If type aliases are added,
+        /// then the object may be injected as an interface or abstract class, in addition to its concrete type.
+        /// </summary>
         public void AddSingletonDependency(object d, params Type[] typeAliases) {
             if (d == null) {
                 throw new ArgumentNullException(nameof(d));
@@ -477,10 +525,18 @@ namespace KC.Actin {
             AddSingletonAlias(concreteType, typeAliases);
         }
 
+        /// <summary>
+        /// If type aliases are added, then the singleton may be injected as an interface
+        /// or abstract class, in addition to its concrete type.
+        /// </summary>
         public void AddSingletonAlias(Type existingSingletonType, params Type[] typeAliases) {
             AddSingletonAlias(existingSingletonType, true, typeAliases);
         }
 
+        /// <summary>
+        /// If type aliases are added, then the singleton may be injected as an interface
+        /// or abstract class, in addition to its concrete type.
+        /// </summary>
         public void AddSingletonAlias(Type existingSingletonType, bool throwIfAliasConflictDetected, params Type[] typeAliases) {
             lock (lockInstantiators) {
                 if (typeAliases == null || typeAliases.Length == 0) {
@@ -513,6 +569,11 @@ namespace KC.Actin {
             }
         }
 
+        /// <summary>
+        /// Extract a Singleton (a root object) from the director.
+        /// This allows external systems to pull resources that were automatically
+        /// created by the director.
+        /// </summary>
         public bool TryGetSingleton(Type type, out object singleton) {
             lock (this.lockInstantiators) {
                 if (instantiators.TryGetValue(type, out var instantiator)) {
@@ -532,12 +593,22 @@ namespace KC.Actin {
             }
         }
 
+        /// <summary>
+        /// Extract a Singleton (a root object) from the director.
+        /// This allows external systems to pull resources that were automatically
+        /// created by the director.
+        /// </summary>
         public bool TryGetSingleton<T>(out T singleton) {
             var success = this.TryGetSingleton(typeof(T), out var instance);
             singleton = success ? (T)instance : default(T);
             return success;
         }
 
+        /// <summary>
+        /// Extract a Singleton (a root object) from the director.
+        /// This allows external systems to pull resources that were automatically
+        /// created by the director. Throws an ApplicationException if the type is not available.
+        /// </summary>
         public object GetSingleton(Type t) {
             if (!this.TryGetSingleton(t, out var singleton)) {
                 throw new ApplicationException($"Singleton of type {t.Name} did not exist.");
@@ -545,6 +616,11 @@ namespace KC.Actin {
             return singleton;
         }
 
+        /// <summary>
+        /// Extract a Singleton (a root object) from the director.
+        /// This allows external systems to pull resources that were automatically
+        /// created by the director. Throws an ApplicationException if the type is not available.
+        /// </summary>
         public T GetSingleton<T>() {
             return (T)GetSingleton(typeof(T));
         }

@@ -1,36 +1,71 @@
 ﻿using KC.Actin.ActorUtilNS;
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace KC.Actin {
     /// <summary>
-    /// This is a container for an action which is run periodically in the main application loop.
-    /// How often it's run is based on what its RunInterval property returns.
+    /// Actors are periodically run by a <c cref="Director">director</c>. To control how often an actor
+    /// is run, override <c cref="Actor_SansType.RunInterval">RunInterval</c>. You can use
+    /// <c cref="Scene">Scenes</c> to dynamically instantiate and manage actors at runtime.
+    /// The director will inject dependencies into the fields on an actor marked with
+    /// <c cref="SingletonAttribute">Singleton</c>,
+    /// <c cref="InstanceAttribute">Instance</c>,
+    /// <c cref="ParentAttribute">Parent</c>,
+    /// or <c cref="SiblingAttribute">Sibling</c> attributes.
+    /// If a concrete dependency cannot be resolved, the 
+    /// <c cref="FlexibleParentAttribute">Parent</c> and
+    /// or <c cref="FlexibleSiblingAttribute">Sibling</c> attributes may need to be used instead.
+    /// You must override the 
+    /// <c cref="Actor_SansType.OnRun">OnRun()</c> function in an actor.
+    /// You may optionally override
+    /// <c cref="Actor_SansType.OnInit">OnInit()</c> and
+    /// <c cref="Actor_SansType.OnDispose">OnDispose()</c>.
     /// </summary>
     public abstract class Actor : Actor<Role, int> {
-        public Actor() { }
     }
 
+    /// <summary>
+    /// See <c cref="Actor">Actor</c> for a general description. All Actors have an Id.
+    /// By default, when inheriting from the normal Actor class, this Id is an integer.
+    /// However, this may not be desired under some circumstances. Actor is based off of
+    /// this generic class which allows you to specify the Id type. TRoleId is the type of the
+    /// Id, and TRole is a Role of type Role&lt;TRoleId&gt;.
+    /// </summary>
     public abstract class Actor<TRole, TRoleId> : Actor_SansType where TRole : Role<TRoleId> {
+        /// <summary>
+        /// The actor's Id. This is used by a <c cref="Scene">Scene</c> when dynamically generating actors.
+        /// </summary>
         public TRoleId Id { get; private set; }
+        /// <summary>
+        /// The actor's Id converted to a string. This will be used during logging.
+        /// You may override this to customize how log locations are displayed.
+        /// No comparisons are done with this property, so you don't have to worry about
+        /// accidental collisions.
+        /// </summary>
         public override string IdString => $"{Id}";
 
         internal override void SetId(object id) {
             this.Id = (TRoleId)id;
         }
-
-        public Actor() : base() { }
     }
 
+    /// <summary>
+    /// See <c cref="Actor">Actor</c> for a general description. This is a base class for
+    /// other actor types which has no generic arguments. Internally, directors manage all
+    /// actors using this type.
+    /// </summary>
     public abstract class Actor_SansType : IDisposable {
+        /// <summary>
+        /// The actor's Id converted to a string. This will be used during logging.
+        /// You may override this to customize how log locations are displayed.
+        /// No comparisons are done with this property, so you don't have to worry about
+        /// accidental collisions.
+        /// </summary>
         public abstract string IdString { get; }
         internal abstract void SetId(object id);
 
-        public ActorLog ActorLog { get; private set; } = new ActorLog();
         internal ActinInstantiator Instantiator { get; set; }
         internal ActorUtil Util;
 
@@ -42,7 +77,7 @@ namespace KC.Actin {
         public Type SceneRoleType { get; internal set; }
 
         private string m_ActorName;
-        public Actor_SansType() {
+        internal Actor_SansType() {
             m_ActorName = this.GetType().Name;
         }
 
@@ -57,8 +92,10 @@ namespace KC.Actin {
             }
         }
         /// <summary>
-        /// How often should OnRun be run?
+        /// How often should OnRun execute?
         /// We only guarantee it won't be run more often than this delay.
+        /// Resolution can be set when configuring the director via
+        /// <c cref="ConfigureUtil.Set_RunLoopInterval">config.Set_RunLoopInterval</c>
         /// </summary>
         /// <returns></returns>
         protected virtual TimeSpan RunInterval => new TimeSpan(0, 0, 0, 0, 500);
@@ -79,15 +116,16 @@ namespace KC.Actin {
             await Task.FromResult(0);
         }
         /// <summary>
-        /// This is run at approximately RunInterval() intervals (probably slightly slower.).
+        /// This is run at approximately RunInterval intervals (probably slightly slower.).
         /// </summary>
         /// <returns></returns>
         protected abstract Task OnRun(ActorUtil util);
 
         /// <summary>
-        /// If KillProcess is called,
+        /// If Dispose is called,
         /// this will be run before this process
-        /// is removed from the process pool.
+        /// is removed from the process pool. Note that dispose does not immediately call
+        /// this function.
         /// </summary>
         /// <returns></returns>
         protected virtual async Task OnDispose(ActorUtil util) {
@@ -104,7 +142,7 @@ namespace KC.Actin {
 
         private SemaphoreSlim ensureRunIsSynchronous = new SemaphoreSlim(1, 1);
 
-        public bool ShouldBeRunNow(DateTimeOffset utcNow) {
+        internal bool ShouldBeRunNow(DateTimeOffset utcNow) {
             lock (lockEverything) {
                 var immediateRunRequestedWas = immediateRunRequested;
                 try {
@@ -128,13 +166,20 @@ namespace KC.Actin {
             }
         }
 
+        /// <summary>
+        /// Calling this function will short circuit the normal time delay for running this actor.
+        /// The actor will be run the next time the director checks which actors are eligible to run.
+        /// By default this is once every 10 milliseconds, but can be adjusted via
+        /// <c cref="ConfigureUtil.Set_RunLoopInterval">config.Set_RunLoopInterval</c>
+        /// when configuring the director.
+        /// </summary>
         public void RequestRun() {
             lock (lockEverything) {
                 immediateRunRequested = true;
             }
         }
 
-        public bool ShouldBeRemovedFromPool {
+        internal bool ShouldBeRemovedFromPool {
             get {
                 lock (lockEverything) {
                     var initFailed = (wasInit && !initSuccessful);
@@ -146,7 +191,7 @@ namespace KC.Actin {
             }
         }
 
-        public bool ShouldBeInit {
+        internal bool ShouldBeInit {
             get {
                 lock (lockEverything) {
                     if (disposing) {
@@ -163,9 +208,8 @@ namespace KC.Actin {
         /// to see if the actor has been scheduled for disposal.
         /// Because OnDispose() will not run until OnRun() has finished,
         /// this allows an actor's OnRun() function to find
-        /// out that it needs to finish early. This is really only important
-        /// when the process might run for 4 seconds, as this is the amount of
-        /// time which the service waits to shut down.
+        /// out that it needs to finish early. This can be helpful if an actor engages
+        /// in an exceptionally long running task.
         /// </summary>
         public bool Disposing {
             get {
@@ -175,7 +219,14 @@ namespace KC.Actin {
             }
         }
 
-        public async Task<ActorDisposeHandle> Init(Func<DispatchData> getDispatchData, bool throwErrors = false) {
+        CancellationTokenSource cancelWhenDisposed = new CancellationTokenSource();
+        /// <summary>
+        /// Returns a CancellationToken which will be cancelled if the actor is disposed.
+        /// This can be passed to underlying processes which are only valid while the actor is running.
+        /// </summary>
+        public CancellationToken ActorDisposedToken => cancelWhenDisposed.Token;
+
+        internal async Task<ActorDisposeHandle> Init(Func<DispatchData> getDispatchData, bool throwErrors = false) {
             lock (lockEverything) {
                 if (this.initStarted) {
                     return null;
@@ -216,7 +267,7 @@ namespace KC.Actin {
         }
 
         private Stopwatch watch = new Stopwatch();
-        public async Task Run(Func<DispatchData> getDispatchData, bool throwErrors = false) {
+        internal async Task Run(Func<DispatchData> getDispatchData, bool throwErrors = false) {
             lock (lockEverything) {
                 isRunning = true;
                 watch.Restart();
@@ -247,19 +298,22 @@ namespace KC.Actin {
         private bool disposing = false;
         private bool disposeScheduled = false;
         private ActorDisposeHandle disposeHandle;
+        /// <summary>
+        /// Request that the actor be disposed. This will not immediately dispose the actor, but instead
+        /// the actor will be disposed by the director during its next run, or by the parent scene.
+        /// Calling this will immediately cancel the <c cref="ActorDisposedToken">ActorDisposedToken</c>.
+        /// </summary>
         public void Dispose() {
             lock (lockEverything) {
                 disposeScheduled = true;
                 if (this.disposeHandle != null) {
                     this.disposeHandle.MustDispose = true;
                     this.disposeHandle = null;
+                    this.cancelWhenDisposed.Cancel();
                 }
             }
         }
 
-        /// <summary>
-        /// For testing use only.
-        /// </summary>
         internal async Task ActuallyDispose(Func<DispatchData> getDispatchData, bool throwErrors = false) {
             lock (lockEverything) {
                 if (disposing) {
@@ -267,6 +321,7 @@ namespace KC.Actin {
                 }
                 disposing = true;
                 disposeScheduled = true;
+                this.cancelWhenDisposed.Cancel();
             }
 
             async Task disposeThings(ActorUtil util) {

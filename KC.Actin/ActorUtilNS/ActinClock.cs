@@ -3,6 +3,14 @@ using System.Collections.Generic;
 using System.Text;
 
 namespace KC.Actin {
+    /// <summary>
+    /// During testing, or when running a simulation, it's often useful to have full
+    /// control over the perceived system time. This class allows you to do this.
+    /// When actors are run, instead of directly accessing DateTimeOffset.Now, you should
+    /// instead use <c cref="ActorUtil.Now">ActorUtil.Now</c>. You can then fully control the perceived
+    /// time during testing, or if the need arises for other reasons. The ActinTest class and the Director
+    /// class both have a public Clock which allow for direct control over the time passed to actors.
+    /// </summary>
     public class ActinClock {
         object lockTime = new object();
         DateTimeOffset? timeAdjustmentStarted;
@@ -10,6 +18,9 @@ namespace KC.Actin {
         double? m_TimeMultiplier;
         bool m_StopSimulationAtPresent;
 
+        /// <summary>
+        /// Returns true if the clock will return a fake time.
+        /// </summary>
         public bool InSimulation {
             get {
                 lock (lockTime) {
@@ -29,8 +40,14 @@ namespace KC.Actin {
             set { lock (lockTime) m_StopSimulationAtPresent = value; }
         }
 
+        /// <summary>
+        /// The current time, or the current simulated time.
+        /// </summary>
         public DateTimeOffset Now => simulatedNowFromTime(DateTimeOffset.Now);
 
+        /// <summary>
+        /// Disable time simulation and instead return the accurate system time.
+        /// </summary>
         public void ResetSimulation() {
             lock (lockTime) {
                 this.timeAdjustmentStarted = null;
@@ -40,6 +57,9 @@ namespace KC.Actin {
         }
 
         /// <summary>
+        /// Simulate a specific time, and set the speed that time will progress.
+        /// If the timeMultiplier is set to 0, then time will not progress until
+        /// this function is called again.
         /// Once time simulation has started, you can turn it off by using ResetSimulation.
         /// All calls to this function assume you want to continue faking the time.
         /// Setting an argument to null means "Don't change this on me". It doesn't mean reset

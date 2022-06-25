@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace KC.Actin
 {
-    public class ActorDisposeHandle
+    class ActorDisposeHandle
     {
         Func<Func<DispatchData>, bool, Task> actuallyDisposeProcess;
         private Actor_SansType process; //This is really just here for debugging. It's not used for anything.

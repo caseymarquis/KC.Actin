@@ -1,16 +1,36 @@
-﻿using KC.Ricochet;
+﻿using KC.Actin.ActorUtilNS;
+using KC.Ricochet;
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
-using System.Reflection;
 using System.Text;
 
 namespace KC.Actin {
-    public class ActinInstantiator {
-        public readonly bool IsRootSingleton;
-        public readonly bool IsActor;
-        public readonly Type Type;
+    /// <summary>
+    /// The internal class ActinInstantiator is used to created instances of objects and to
+    /// resolve and inject dependencies. This interface gives limited access to this class
+    /// to support the <c cref="ConfigureUtil.Set_RootActorFilter">Set_RootActorFilter</c>
+    /// function on director configuration. This function is useful during testing scenarios,
+    /// as it allows only specified dependencies to be injected based on type information.
+    /// You can see examples of how this function is used in Actin's unit tests.
+    /// </summary>
+    public interface IActinInstantiator {
+        bool IsRootSingleton { get; } 
+        bool IsActor { get; }
+        Type Type { get; }
+    }
+
+    internal class ActinInstantiator : IActinInstantiator {
+        internal readonly bool IsRootSingleton;
+        bool IActinInstantiator.IsRootSingleton => IsRootSingleton;
+
+        internal readonly bool IsActor;
+        bool IActinInstantiator.IsActor => IsActor;
+
+        internal readonly Type Type;
+        Type IActinInstantiator.Type => Type;
+
         private bool runBefore;
         //Null unless a Parent or Sibling attribute was used. To keep it null, use the flexible attributes instead.
         private Type StaticParentType;
@@ -273,13 +293,13 @@ namespace KC.Actin {
         private object lockSingleton = new object();
         private object singleton;
 
-        public bool HasSingletonInstance {
+        internal bool HasSingletonInstance {
             get {
                 lock(lockSingleton) return singleton != null;
             }
         }
 
-        public bool WasBuilt => runBefore;
+        internal bool WasBuilt => runBefore;
 
         internal object GetSingletonInstance(Director director) {
             lock (lockSingleton) {
@@ -315,7 +335,7 @@ namespace KC.Actin {
         }
     }
 
-    public enum DependencyType {
+    enum DependencyType {
         Singleton,
         Instance,
     }

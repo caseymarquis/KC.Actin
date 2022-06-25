@@ -6,6 +6,9 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace KC.Actin.ActorUtilNS {
+    /// <summary>
+    /// Used to configure a director when it is started.
+    /// </summary>
     public class ConfigureUtil {
         private static object lockLastDirectorName = new object();
         private static int lastDirectorName;
@@ -52,7 +55,7 @@ namespace KC.Actin.ActorUtilNS {
         /// This is useful for testing, where you only want certain
         /// actors started so other Actors don't cause tests to fail.
         /// </summary>
-        public ConfigureUtil Set_RootActorFilter(Func<ActinInstantiator, bool> actorShouldBeBuilt) {
+        public ConfigureUtil Set_RootActorFilter(Func<IActinInstantiator, bool> actorShouldBeBuilt) {
             RootActorFilter = actorShouldBeBuilt;
             return this;
         }
