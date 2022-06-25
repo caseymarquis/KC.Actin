@@ -138,12 +138,45 @@ namespace KC.Actin {
                 }
             }
 
+            var runtimeLogIsStandardButStartLogIsNot =
+                !(startUpLogAsActor is ActinStandardLogger)
+                && typeof(ActinStandardLogger) == config.RuntimeLogType;
+            if (runtimeLogIsStandardButStartLogIsNot) {
+                var runtimeLogInstantiator = new ActinInstantiator(config.RuntimeLogType);
+                if (!runtimeLogInstantiator.Build(t => {
+                    throw new ApplicationException($"ActinStandardLogger must have no dependencies.");
+                })) {
+                    throw new ApplicationException($"ActinStandardLogger must have no dependencies.");
+                }
+                lock (lockInstantiators) {
+                    instantiators[config.RuntimeLogType] = runtimeLogInstantiator;
+                }
+                runtimeLogInstantiator.GetSingletonInstance(this);
+            }
+
             try {
                 //Do manual user start up:
                 log.Info("Director Initializing");
-                await config.RunBeforeStart(new ActorUtil(null, this.Clock) {
-                    Log = log,
-                });
+                {
+                    Atom<bool> runBeforeStartFinishedAtom = new Atom<bool>(false);
+#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+                    Task.Run(async () => {
+                        try {
+                            while (!runBeforeStartFinishedAtom.Value) {
+                                await runStartUpLog();
+                                await Task.Delay(1000);
+                            }
+                        }
+                        catch { }
+                    });
+#pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+                    await config.RunBeforeStart(new ActorUtil(null, this.Clock) {
+                        Log = log,
+                    });
+                    runBeforeStartFinishedAtom.Value = true;
+                    await runStartUpLog();
+                }
+
                 //Do automated DI startup:
                 foreach (var a in config.AssembliesToCheckForDI) {
                     try {
@@ -213,9 +246,27 @@ namespace KC.Actin {
                 }
 
                 runtimeLog.AddDestination(rtLogAsIActinLogger);
-                await config.RunAfterStart(new ActorUtil(null, this.Clock) {
-                    Log = new LogDispatcherForActor(runtimeLog, "After Start"),
-                });
+
+                {
+                    Atom<bool> runAfterStartFinishedAtom = new Atom<bool>(false);
+#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+                    Task.Run(async () => {
+                        try {
+                            while (!runAfterStartFinishedAtom.Value) {
+                                await runRealTimeLog(rtLog as Actor_SansType);
+                                await Task.Delay(1000);
+                            }
+                        }
+                        catch { }
+                    });
+#pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+                    await config.RunAfterStart(new ActorUtil(null, this.Clock) {
+                        Log = new LogDispatcherForActor(runtimeLog, "After Start"),
+                    });
+                    runAfterStartFinishedAtom.Value = true;
+                    await runRealTimeLog(rtLog as Actor_SansType);
+                }
+
                 return config;
             }
             catch (Exception ex) when (logFailedStartup(ex)) {
@@ -253,6 +304,28 @@ namespace KC.Actin {
                 }
                 catch {
                     //Nowhere to put this if the log is failing.
+                }
+            }
+
+            async Task runRealTimeLog(Actor_SansType rtLog) {
+                try {
+                    if (rtLog == null) {
+                        return;
+                    }
+                    var disposeHandle = await rtLog.Init(() => new DispatchData {
+                        MainLog = new ConsoleLogger(),
+                    });
+                    if (disposeHandle != null) {
+                        lock (lockDisposeHandles) {
+                            disposeHandles.Add(disposeHandle);
+                        }
+                    }
+                    await rtLog.Run(() => new DispatchData {
+                        MainLog = new ConsoleLogger(),
+                    });
+                }
+                catch {
+                    //TODO: Could we use the start up log?
                 }
             }
 
