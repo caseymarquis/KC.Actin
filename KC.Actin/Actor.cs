@@ -15,8 +15,8 @@ namespace KC.Actin {
     /// <c cref="ParentAttribute">Parent</c>,
     /// or <c cref="SiblingAttribute">Sibling</c> attributes.
     /// If a concrete dependency cannot be resolved, the 
-    /// <c cref="FlexibleParentAttribute">Parent</c> and
-    /// or <c cref="FlexibleSiblingAttribute">Sibling</c> attributes may need to be used instead.
+    /// <c cref="FlexibleParentAttribute">FlexibleParent</c> and
+    /// or <c cref="FlexibleSiblingAttribute">FlexibleSibling</c> attributes may need to be used instead.
     /// You must override the 
     /// <c cref="Actor_SansType.OnRun">OnRun()</c> function in an actor.
     /// You may optionally override
