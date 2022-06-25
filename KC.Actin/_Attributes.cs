@@ -13,6 +13,7 @@ namespace KC.Actin
     ///
     /// If this class is used on a field or property, then that field or property will be automatically initialized
     /// with the singleton instance.
+    /// </summary>
     public class SingletonAttribute : Ricochet.RicochetMark {
         /// <summary>
         /// See class description.
