@@ -188,9 +188,15 @@ namespace KC.Actin {
         /// <returns></returns>
         public async Task RequestAndAwaitRun(CancellationToken? cToken = null) {
             int runCounterWas;
-            lock (lockEverything) {
-                runCounterWas = runCounter;
-                immediateRunRequested = true;
+            await ensureRunIsSynchronous.WaitAsync();
+            try {
+                lock (lockEverything) {
+                    runCounterWas = runCounter;
+                    immediateRunRequested = true;
+                }
+            }
+            finally {
+                ensureRunIsSynchronous.Release();
             }
 
             while (true) {
