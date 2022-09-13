@@ -4,7 +4,6 @@ using KC.Ricochet;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 
 namespace KC.Actin {
@@ -12,19 +11,35 @@ namespace KC.Actin {
 
         object lockSingletons = new object();
         Dictionary<Type, object> singletons = new Dictionary<Type, object>();
-        public ActinClock Clock { get; private set; } = new ActinClock();
+        public Director Director { get; private set; } = new Director();
+        public ActinClock Clock => Director.Clock;
 
         public ActinTest() {
             singletons[typeof(ICreateInstanceActorForScene)] = this;
+            singletons[typeof(Director)] = Director;
+        }
+
+        public void AddObject(object instance, params Type[] aliases) {
+            if (instance == null) {
+                throw new NullReferenceException($"{nameof(AddObject)}(instance: null)");
+            }
+            var t = instance.GetType();
+            aliases = new Type[] { t }.Concat(aliases ?? new Type[0]).ToArray();
+            lock (lockSingletons) {
+                foreach (var alias in aliases) {
+                    if (singletons.ContainsKey(alias)) {
+                        throw new ApplicationException($"{alias.Name} already exists in the ActinTest!");
+                    }
+                    singletons[alias] = instance;
+                }
+            }
         }
 
         private async Task<object> GetActorInternal(Type t, bool initialize, Actor_SansType parentScene) {
             var isSingleton = t.HasAttribute<SingletonAttribute>();
-            if (isSingleton) {
-                lock (lockSingletons) {
-                    if (singletons.TryGetValue(t, out var singletonInstance)) {
-                        return singletonInstance;
-                    }
+            lock (lockSingletons) {
+                if (singletons.TryGetValue(t, out var singletonInstance)) {
+                    return singletonInstance;
                 }
             }
 
@@ -32,7 +47,7 @@ namespace KC.Actin {
             var instance = constructor.New();
             var actorInstance = instance as Actor_SansType;
             if (actorInstance != null) {
-                actorInstance.Util = new ActorUtil(actorInstance, this.Clock) {
+                actorInstance.Util = new ActorUtil(actorInstance, Clock) {
                     _IsTest_ = true,
                 };
             }
@@ -57,7 +72,7 @@ namespace KC.Actin {
                             throw new ApplicationException($"In class {t.Name}, field {prop.Name} must use the FlexibleParent attribute instead of the Parent attribute, as its parent is a Scene.");
                         }
                         else {
-                            var relative = this.GetDependencyInternal(prop.Type, parentScene);
+                            var relative = GetDependencyInternal(prop.Type, parentScene);
                             prop.SetVal(instance, relative);
                         }
                     }
@@ -65,7 +80,7 @@ namespace KC.Actin {
                         var relative = RicochetUtil.GetConstructor(prop.Type).New();
                         var relativeActor = relative as Actor_SansType;
                         if (relativeActor != null) {
-                            relativeActor.Util = new ActorUtil(relativeActor, this.Clock) {
+                            relativeActor.Util = new ActorUtil(relativeActor, Clock) {
                                 _IsTest_ = true,
                             };
                         }
@@ -78,7 +93,7 @@ namespace KC.Actin {
                             singleton = RicochetUtil.GetConstructor(prop.Type).New();
                             var singletonActor = singleton as Actor_SansType;
                             if (singletonActor != null) {
-                                singletonActor.Util = new ActorUtil(singletonActor, this.Clock) {
+                                singletonActor.Util = new ActorUtil(singletonActor, Clock) {
                                     _IsTest_ = true
                                 };
                             }
@@ -91,7 +106,7 @@ namespace KC.Actin {
                     var child = RicochetUtil.GetConstructor(prop.Type).New();
                     var childActor = child as Actor_SansType;
                     if (childActor != null) {
-                        childActor.Util = new ActorUtil(childActor, this.Clock) {
+                        childActor.Util = new ActorUtil(childActor, Clock) {
                             _IsTest_ = true
                         };
                     }
@@ -100,21 +115,21 @@ namespace KC.Actin {
             }
 
             if (initialize && actorInstance != null) {
-                await this.InitActor(actorInstance);
+                await InitActor(actorInstance);
             }
             return instance;
         }
 
         public T GetActor<T>() where T : Actor_SansType {
-            return (T)this.GetActorInternal(typeof(T), initialize: false, parentScene: null).Result;
+            return (T)GetActorInternal(typeof(T), initialize: false, parentScene: null).Result;
         }
 
         public T GetObject<T>() {
-            return (T)this.GetActorInternal(typeof(T), initialize: false, parentScene: null).Result;
+            return (T)GetActorInternal(typeof(T), initialize: false, parentScene: null).Result;
         }
 
         public async Task<T> GetInitializedActor<T>() where T : Actor_SansType {
-            return (T)await this.GetActorInternal(typeof(T), initialize: true, parentScene: null);
+            return (T)await GetActorInternal(typeof(T), initialize: true, parentScene: null);
         }
 
         /// <summary>
@@ -144,7 +159,7 @@ namespace KC.Actin {
 
         public async Task InitActor(Actor_SansType actor, DateTimeOffset? time = null, bool throwErrors = true) {
             if (time != null) {
-                this.Clock.Simulate(time, null);
+                Clock.Simulate(time, null);
             }
             await actor.Init(() => new ActorUtilNS.DispatchData {
                 MainLog = new EmptyLog(),
@@ -153,7 +168,7 @@ namespace KC.Actin {
 
         public async Task RunActor(Actor_SansType actor, DateTimeOffset? time = null, bool throwErrors = true) {
             if (time != null) {
-                this.Clock.Simulate(time, null);
+                Clock.Simulate(time, null);
             }
             await actor.Run(() => new ActorUtilNS.DispatchData {
                 MainLog = new EmptyLog(),
@@ -162,7 +177,7 @@ namespace KC.Actin {
 
         public async Task DisposeActor(Actor_SansType actor, DateTimeOffset? time = null, bool throwErrors = true) {
             if (time != null) {
-                this.Clock.Simulate(time, null);
+                Clock.Simulate(time, null);
             }
             await actor.ActuallyDispose(() => new ActorUtilNS.DispatchData {
                 MainLog = new EmptyLog(),

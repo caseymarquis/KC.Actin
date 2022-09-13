@@ -1,8 +1,6 @@
 using KC.Actin;
-using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 using System.Threading.Tasks;
 using Xunit;
 
@@ -56,6 +54,9 @@ namespace Test.Actin {
         [Singleton] public class ChildOnly { }
         [Singleton] public class ParentAndChild { }
 
+        public class POCO : IPOCO { }
+        public interface IPOCO { }
+
         [Fact]
         public async Task GetDependency() {
             var at = new ActinTest();
@@ -67,6 +68,28 @@ namespace Test.Actin {
             Assert.Equal(child.ChildOnly, childOnly);
             var parentAndChild_child = at.GetDependency<ParentAndChild>(child);
             Assert.Equal(child.ParentAndChild_Child, parentAndChild_child);
+        }
+
+        [Fact]
+        public void GetDirector() {
+            var at = new ActinTest();
+            Assert.NotNull(at.Director);
+            var director = at.GetObject<Director>();
+            Assert.NotNull(director);
+            Assert.Same(director.Clock, at.Clock);
+            Assert.Same(director, at.Director);
+        }
+
+        [Fact]
+        public void SetAndGetSingleton() {
+            var at = new ActinTest();
+
+            var poco = new POCO();
+            at.AddObject(poco, typeof(IPOCO));
+            var pocoDirect = at.GetObject<POCO>();
+            var pocoAlias = at.GetObject<IPOCO>();
+            Assert.Same(poco, pocoDirect);
+            Assert.Same(poco, pocoAlias);
         }
 
         [Fact]
